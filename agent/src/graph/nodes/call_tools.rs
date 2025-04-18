@@ -11,11 +11,6 @@ impl<P: Provider> NodeRunner<P> for CallTools {
         state: &mut State,
         _deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
-        // This would normally parse the tool request from the LLM response
-        // and execute the requested tool
-        println!("Tool request received but not implemented yet");
-        println!("Messages: {:?}", state.messages);
-
         // Just a placeholder - in a real implementation we would:
         // 1. Extract tool name and parameters from the last message
         // 2. Call the tool

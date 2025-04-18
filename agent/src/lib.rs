@@ -1,9 +1,7 @@
 use providers::{Provider, Tool};
 
 pub mod graph;
-pub use graph::{
-    CurrentNode, Deps, GraphError, GraphIter, GraphRunner, NodeRunner, NodeTransition, State,
-};
+pub use graph::{CurrentNode, Deps, GraphError, GraphIter, NodeRunner, NodeTransition, State};
 
 pub struct Agent<P: Provider> {
     provider: P,
@@ -36,14 +34,16 @@ impl<P: Provider> Agent<P> {
             })
             .collect();
 
-        let graph_runner = GraphRunner::new(
-            self.provider.clone(),
-            system_prompt.to_string(),
+        // Create the dependencies for GraphIter
+        let deps = Deps {
+            provider: self.provider.clone(),
+            tools: Some(tools),
+            system_prompt: system_prompt.to_string(),
             max_tokens,
             temperature,
-            Some(tools),
-        );
+        };
 
-        graph_runner.create_iter(user_prompt.to_string())
+        // Create GraphIter directly
+        GraphIter::new(deps, user_prompt.to_string())
     }
 }

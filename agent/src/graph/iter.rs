@@ -19,6 +19,7 @@ impl<P: Provider> GraphIter<P> {
             current_user_prompt: user_prompt,
             tool_outputs: std::collections::HashMap::new(),
         };
+
         GraphIter {
             deps,
             state,
@@ -93,12 +94,14 @@ impl<P: Provider> GraphIter<P> {
             }
             CurrentNode::End => {
                 let result = End.run(&mut self.state, &self.deps).await;
+
                 // Store the result if we've reached the end
                 if let Some(last_message) = self.state.messages.last() {
                     if last_message.role == Role::Assistant {
                         self.result = Some(last_message.content.clone());
                     }
                 }
+
                 self.finished = true;
                 result.map(|_| self.current_node.clone())
             }
@@ -110,44 +113,5 @@ impl<P: Provider> GraphIter<P> {
     /// Get the current state
     pub fn state(&self) -> &State {
         &self.state
-    }
-}
-
-/// The graph runner
-pub struct GraphRunner<P: Provider> {
-    deps: Deps<P>,
-}
-
-impl<P: Provider> GraphRunner<P> {
-    pub fn new(
-        provider: P,
-        system_prompt: String,
-        max_tokens: u32,
-        temperature: Option<f64>,
-        tools: Option<Vec<providers::Tool>>,
-    ) -> Self {
-        let deps = Deps {
-            provider,
-            tools,
-            system_prompt,
-            max_tokens,
-            temperature,
-        };
-        GraphRunner { deps }
-    }
-
-    /// Create a new graph iterator
-    pub fn create_iter(&self, user_prompt: String) -> GraphIter<P>
-    where
-        P: Clone,
-    {
-        let deps = Deps {
-            provider: self.deps.provider.clone(),
-            tools: self.deps.tools.clone(),
-            system_prompt: self.deps.system_prompt.clone(),
-            max_tokens: self.deps.max_tokens,
-            temperature: self.deps.temperature,
-        };
-        GraphIter::new(deps, user_prompt)
     }
 }
