@@ -34,6 +34,6 @@ impl<P: Provider> Agent<P> {
         // Send the prompt to the provider
         let response = self.provider.send_prompt(&prompt, Some(tools)).await?;
 
-        Ok(response)
+        Ok(response.content)
     }
 }

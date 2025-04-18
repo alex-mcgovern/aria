@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use serde::{Deserialize, Serialize};
 
-use crate::{Provider, Tool};
+use crate::{Provider, ProviderResponse, StopReason, Tool};
 
 pub struct ClaudeProvider {
     api_key: String,
@@ -36,11 +36,6 @@ struct Message {
 }
 
 #[derive(Debug, Deserialize)]
-struct ClaudeResponse {
-    content: Vec<Content>,
-}
-
-#[derive(Debug, Deserialize)]
 struct Content {
     text: String,
     #[serde(rename = "type")]
@@ -56,7 +51,11 @@ impl Provider for ClaudeProvider {
         }
     }
 
-    async fn send_prompt(&self, prompt: &str, tools: Option<Vec<Tool>>) -> Result<String> {
+    async fn send_prompt(
+        &self,
+        prompt: &str,
+        tools: Option<Vec<Tool>>,
+    ) -> Result<ProviderResponse> {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
@@ -96,15 +95,36 @@ impl Provider for ClaudeProvider {
 
         println!("Response json: {:#?}", response_json);
 
+        // Extract content text
         let content = &response_json["content"];
+        let mut content_text = String::new();
         if let Some(content) = content.as_array() {
             if let Some(first_content) = content.first() {
                 if let Some(text) = first_content["text"].as_str() {
-                    return Ok(text.to_string());
+                    content_text = text.to_string();
                 }
             }
         }
 
-        Err(anyhow::anyhow!("Failed to get text from Claude response"))
+        if content_text.is_empty() {
+            return Err(anyhow::anyhow!("Failed to get text from Claude response"));
+        }
+
+        // Extract stop reason
+        let stop_reason = match response_json["stop_reason"].as_str() {
+            Some("end_turn") => Some(StopReason::EndTurn),
+            Some("max_tokens") => Some(StopReason::MaxTokens),
+            Some("stop_sequence") => Some(StopReason::StopSequence),
+            Some("tool_use") => Some(StopReason::ToolUse),
+            Some(other) => return Err(anyhow::anyhow!("Unknown stop reason: {}", other)),
+            None => return Err(anyhow::anyhow!("Missing stop reason in response")),
+        };
+
+        println!("Stop reason: {:?}", stop_reason);
+
+        Ok(ProviderResponse {
+            content: content_text,
+            stop_reason,
+        })
     }
 }
