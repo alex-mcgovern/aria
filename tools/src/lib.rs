@@ -1,78 +1,170 @@
-use anyhow::Result;
 use serde_json::json;
 use std::{fs, path::Path, process::Command};
 
-/// Run a command in the terminal
-pub async fn run_command(cmd: &str, args: Vec<&str>) -> Result<String> {
-    let output = Command::new(cmd).args(&args).output()?;
+/// A struct to represent the result of tool operations
+#[derive(Debug)]
+pub struct ToolResult {
+    pub is_error: bool,
+    pub content: ToolContent,
+}
 
-    let stdout = String::from_utf8(output.stdout)?;
-    let stderr = String::from_utf8(output.stderr)?;
+/// Represents either a single string or an array of strings
+#[derive(Debug)]
+pub enum ToolContent {
+    String(String),
+    StringArray(Vec<String>),
+}
+
+/// Run a command in the terminal
+pub async fn run_command(cmd: &str, args: Vec<&str>) -> ToolResult {
+    let output = match Command::new(cmd).args(&args).output() {
+        Ok(output) => output,
+        Err(e) => {
+            return ToolResult {
+                is_error: true,
+                content: ToolContent::String(format!("Failed to execute command: {}", e)),
+            };
+        }
+    };
+
+    let stdout = match String::from_utf8(output.stdout) {
+        Ok(stdout) => stdout,
+        Err(e) => {
+            return ToolResult {
+                is_error: true,
+                content: ToolContent::String(format!("Failed to parse command output: {}", e)),
+            };
+        }
+    };
+
+    let stderr = match String::from_utf8(output.stderr) {
+        Ok(stderr) => stderr,
+        Err(e) => {
+            return ToolResult {
+                is_error: true,
+                content: ToolContent::String(format!("Failed to parse error output: {}", e)),
+            };
+        }
+    };
 
     if output.status.success() {
-        Ok(stdout)
+        ToolResult {
+            is_error: false,
+            content: ToolContent::String(stdout),
+        }
     } else {
-        Err(anyhow::anyhow!("Command failed: {}", stderr))
+        ToolResult {
+            is_error: true,
+            content: ToolContent::String(format!("Command failed: {}", stderr)),
+        }
     }
 }
 
 /// Read a file and return its contents
-pub async fn read_file(path: &str) -> Result<String> {
-    let contents = fs::read_to_string(path)?;
-    Ok(contents)
+pub async fn read_file(path: &str) -> ToolResult {
+    match fs::read_to_string(path) {
+        Ok(contents) => ToolResult {
+            is_error: false,
+            content: ToolContent::String(contents),
+        },
+        Err(e) => ToolResult {
+            is_error: true,
+            content: ToolContent::String(format!("Failed to read file '{}': {}", path, e)),
+        },
+    }
 }
 
 /// Write a file with the given contents
-pub async fn write_file(path: &str, contents: &str) -> Result<()> {
+pub async fn write_file(path: &str, contents: &str) -> ToolResult {
     // Ensure the parent directory exists
     if let Some(parent) = Path::new(path).parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    fs::write(path, contents)?;
-    Ok(())
-}
-
-/// List all files in a directory
-pub async fn list_files(dir: &str) -> Result<Vec<String>> {
-    let entries = fs::read_dir(dir)?;
-    let mut files = Vec::new();
-
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-
-        if let Some(path_str) = path.to_str() {
-            files.push(path_str.to_owned());
+        if let Err(e) = fs::create_dir_all(parent) {
+            return ToolResult {
+                is_error: true,
+                content: ToolContent::String(format!(
+                    "Failed to create directory '{}': {}",
+                    parent.display(),
+                    e
+                )),
+            };
         }
     }
 
-    Ok(files)
+    match fs::write(path, contents) {
+        Ok(_) => ToolResult {
+            is_error: false,
+            content: ToolContent::String(format!("Successfully wrote to file '{}'", path)),
+        },
+        Err(e) => ToolResult {
+            is_error: true,
+            content: ToolContent::String(format!("Failed to write to file '{}': {}", path, e)),
+        },
+    }
+}
+
+/// List all files in a directory
+pub async fn list_files(dir: &str) -> ToolResult {
+    match fs::read_dir(dir) {
+        Ok(entries) => {
+            let mut files = Vec::new();
+            for entry in entries {
+                match entry {
+                    Ok(entry) => {
+                        let path = entry.path();
+                        if let Some(path_str) = path.to_str() {
+                            files.push(path_str.to_owned());
+                        }
+                    }
+                    Err(e) => {
+                        return ToolResult {
+                            is_error: true,
+                            content: ToolContent::String(format!(
+                                "Failed to read directory entry: {}",
+                                e
+                            )),
+                        };
+                    }
+                }
+            }
+            ToolResult {
+                is_error: false,
+                content: ToolContent::StringArray(files),
+            }
+        }
+        Err(e) => ToolResult {
+            is_error: true,
+            content: ToolContent::String(format!("Failed to read directory '{}': {}", dir, e)),
+        },
+    }
 }
 
 /// List all files in a directory and its subdirectories
-pub async fn tree(dir: &str) -> Result<Vec<String>> {
-    fn visit_dir(dir: &Path, files: &mut Vec<String>) -> Result<()> {
+pub async fn tree(dir: &str) -> ToolResult {
+    fn visit_dir(dir: &Path, files: &mut Vec<String>) -> Result<(), std::io::Error> {
         for entry in fs::read_dir(dir)? {
             let entry = entry?;
             let path = entry.path();
-
             if let Some(path_str) = path.to_str() {
                 files.push(path_str.to_owned());
             }
-
             if path.is_dir() {
                 visit_dir(&path, files)?;
             }
         }
-
         Ok(())
     }
 
     let mut files = Vec::new();
-    visit_dir(Path::new(dir), &mut files)?;
-
-    Ok(files)
+    match visit_dir(Path::new(dir), &mut files) {
+        Ok(_) => ToolResult {
+            is_error: false,
+            content: ToolContent::StringArray(files),
+        },
+        Err(e) => ToolResult {
+            is_error: true,
+            content: ToolContent::String(format!("Failed to traverse directory '{}': {}", dir, e)),
+        },
+    }
 }
 
 /// Define tool schemas for the LLM
