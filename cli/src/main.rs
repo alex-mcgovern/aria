@@ -38,8 +38,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Get API key from environment
-    let api_key =
-        std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY environment variable not set");
+    let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
+        anyhow::anyhow!("ANTHROPIC_API_KEY environment variable not set. Please export ANTHROPIC_API_KEY='your-key-here' and try again.")
+    })?;
 
     // Create provider and agent
     let provider = ClaudeProvider::new(api_key);

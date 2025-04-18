@@ -19,6 +19,16 @@ struct ClaudeRequest {
     tools: Option<Vec<Tool>>,
 }
 
+impl std::fmt::Display for ClaudeRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "ClaudeRequest {{ model: {}, max_tokens: {} }}",
+            self.model, self.max_tokens
+        )
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Message {
     role: String,
@@ -64,19 +74,27 @@ impl Provider for ClaudeProvider {
             tools,
         };
 
+        println!("Request: {}", request);
+
         let response = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post("http://127.0.0.1:8080/v1/messages")
             .headers(headers)
             .json(&request)
             .send()
             .await
             .context("Failed to send request to Claude API")?;
 
+        // Print status code and headers
+        println!("Response Status: {}", response.status());
+        println!("Response Headers: {:#?}", response.headers());
+
         let response_json: serde_json::Value = response
             .json()
             .await
             .context("Failed to parse Claude API response")?;
+
+        println!("Response json: {:#?}", response_json);
 
         let content = &response_json["content"];
         if let Some(content) = content.as_array() {

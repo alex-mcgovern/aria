@@ -1,5 +1,6 @@
 [package]
-name = "cli"
+name = "aria"
+description = "Agentic Reasoning and Implementation Assistant"
 version = "0.1.0"
 edition = "2021"
 
