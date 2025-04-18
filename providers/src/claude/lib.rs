@@ -4,6 +4,7 @@ use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 
 use super::models::{ClaudeModel, ClaudeRequest, Message};
 
+#[derive(Clone)]
 pub struct ClaudeProvider {
     api_key: String,
     client: reqwest::Client,

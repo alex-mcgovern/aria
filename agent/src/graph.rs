@@ -121,6 +121,9 @@ impl<P: Provider> NodeRunner<P> for UserRequest {
             content: response.content.clone(),
         });
 
+        println!("Assistant response: {}", response.content);
+        println!("[GRAPH] Stop reason: {:?}", response.stop_reason);
+
         // Route based on stop reason
         match response.stop_reason {
             Some(StopReason::MaxTokens) => {

@@ -5,6 +5,13 @@ use providers::claude::ClaudeProvider;
 use providers::Provider;
 use std::io::{self, Write};
 
+const DEFAULT_SYSTEM_PROMPT: &str = "You are an AI assistant helping with code editing tasks. \
+The user will provide a request, and you can use tools to help them. \
+Always explain what you're doing before using tools.";
+
+const DEFAULT_MAX_TOKENS: u32 = 4096;
+const DEFAULT_TEMPERATURE: f64 = 0.7;
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -62,7 +69,15 @@ async fn main() -> Result<()> {
                 println!("Working directory set to: {}", dir_path);
             }
 
-            let response = agent.process_input(&prompt).await?;
+            let response = agent
+                .run(
+                    prompt,
+                    DEFAULT_SYSTEM_PROMPT,
+                    DEFAULT_MAX_TOKENS,
+                    Some(DEFAULT_TEMPERATURE),
+                )
+                .await
+                .map_err(|e| anyhow::anyhow!("Graph processing error: {:?}", e))?;
             println!("{}", response);
         }
         None => {
@@ -74,7 +89,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn interactive_loop<P: Provider>(agent: &Agent<P>) -> Result<()> {
+async fn interactive_loop<P: Provider>(agent: &Agent<P>) -> Result<()>
+where
+    P: Clone,
+{
     println!("Interactive mode. Enter 'exit' or 'quit' to end the session.");
 
     loop {
@@ -93,9 +111,17 @@ async fn interactive_loop<P: Provider>(agent: &Agent<P>) -> Result<()> {
             continue;
         }
 
-        match agent.process_input(input).await {
+        match agent
+            .run(
+                input,
+                DEFAULT_SYSTEM_PROMPT,
+                DEFAULT_MAX_TOKENS,
+                Some(DEFAULT_TEMPERATURE),
+            )
+            .await
+        {
             Ok(response) => println!("{}", response),
-            Err(e) => eprintln!("Error: {}", e),
+            Err(e) => eprintln!("Error: {:?}", e),
         }
     }
 
