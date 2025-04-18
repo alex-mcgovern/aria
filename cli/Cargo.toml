@@ -7,6 +7,6 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 clap = { version = "4.5.36", features = ["derive"] }
-core = { path = "../core" }
+agent = { path = "../agent" }
 providers = { path = "../providers" }
 tokio = { workspace = true }

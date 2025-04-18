@@ -1,6 +1,6 @@
+use agent::Agent;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use core::Agent;
 use providers::claude::ClaudeProvider;
 use providers::Provider;
 use std::io::{self, Write};

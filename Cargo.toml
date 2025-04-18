@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "core", "providers", "tools"]
+members = ["agent", "cli", "providers", "tools"]
 
 [workspace.dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
