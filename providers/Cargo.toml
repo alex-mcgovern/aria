@@ -1,0 +1,11 @@
+[package]
+name = "providers"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+reqwest = { version = "0.12.15", features = ["json"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

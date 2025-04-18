@@ -1,0 +1,12 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+providers = { path = "../providers" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tools = { path = "../tools" }

@@ -1,0 +1,8 @@
+[workspace]
+members = ["cli", "core", "providers", "tools"]
+
+[workspace.dependencies]
+serde = { version = "1.0.219", features = ["derive"] }
+tokio = { version = "1.44.2", features = ["rt", "rt-multi-thread", "macros"] }
+anyhow = { version = "1.0.98" }
+serde_json = { version = "1.0.140" }
