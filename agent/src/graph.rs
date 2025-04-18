@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use providers::{Message, Provider, Role, StopReason, Tool};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
@@ -37,7 +37,7 @@ impl From<anyhow::Error> for GraphError {
 #[derive(Debug)]
 pub struct State {
     pub messages: Vec<Message>,
-    pub current_input: String,
+    pub current_user_prompt: String,
     pub tool_outputs: HashMap<String, String>,
 }
 
@@ -95,7 +95,7 @@ impl<P: Provider> NodeRunner<P> for Start {
         // Setup initial state with user input
         state.messages.push(Message {
             role: Role::User,
-            content: state.current_input.clone(),
+            content: state.current_user_prompt.clone(),
         });
 
         Ok(NodeTransition::ToUserRequest)
@@ -111,7 +111,7 @@ impl<P: Provider> NodeRunner<P> for UserRequest {
         // Send the current messages to the LLM provider
         let response = deps
             .provider
-            .send_prompt(&state.current_input, deps.tools.clone())
+            .send_prompt(&state.current_user_prompt, deps.tools.clone())
             .await
             .context("Failed to send prompt to provider")?;
 
@@ -173,6 +173,129 @@ impl<P: Provider> NodeRunner<P> for End {
     }
 }
 
+/// Enum representing the current node in the graph
+#[derive(Debug, Clone)]
+pub enum CurrentNode {
+    Start,
+    UserRequest,
+    CallTools,
+    End,
+}
+
+/// A struct to hold the state of a graph iteration
+pub struct GraphIter<P: Provider> {
+    deps: Deps<P>,
+    state: State,
+    current_node: CurrentNode,
+    finished: bool,
+    result: Option<String>,
+}
+
+impl<P: Provider> GraphIter<P> {
+    /// Create a new graph iterator
+    fn new(deps: Deps<P>, user_prompt: String) -> Self {
+        let state = State {
+            messages: Vec::new(),
+            current_user_prompt: user_prompt,
+            tool_outputs: HashMap::new(),
+        };
+
+        GraphIter {
+            deps,
+            state,
+            current_node: CurrentNode::Start,
+            finished: false,
+            result: None,
+        }
+    }
+
+    /// Get the result of the graph execution
+    pub fn get_result(&self) -> Option<&str> {
+        self.result.as_deref()
+    }
+
+    /// Run the next node in the graph
+    pub async fn next(&mut self) -> Option<std::result::Result<CurrentNode, GraphError>> {
+        if self.finished {
+            return None;
+        }
+
+        let transition_result = match self.current_node {
+            CurrentNode::Start => {
+                let result = Start.run(&mut self.state, &self.deps).await;
+                self.current_node = CurrentNode::UserRequest;
+                result.map(|_| self.current_node.clone())
+            }
+            CurrentNode::UserRequest => {
+                let result = UserRequest.run(&mut self.state, &self.deps).await;
+                match &result {
+                    Ok(transition) => match transition {
+                        NodeTransition::ToCallTools => {
+                            self.current_node = CurrentNode::CallTools;
+                        }
+                        NodeTransition::ToEnd => {
+                            self.current_node = CurrentNode::End;
+                        }
+                        _ => {
+                            return Some(Err(GraphError::InvalidStateTransition(
+                                "Invalid transition from UserRequest".to_string(),
+                            )));
+                        }
+                    },
+                    Err(_) => {
+                        // On error, we'll return the error and mark as finished
+                        self.finished = true;
+                    }
+                }
+                result.map(|_| self.current_node.clone())
+            }
+            CurrentNode::CallTools => {
+                let result = CallTools.run(&mut self.state, &self.deps).await;
+                match &result {
+                    Ok(transition) => match transition {
+                        NodeTransition::ToUserRequest => {
+                            self.current_node = CurrentNode::UserRequest;
+                        }
+                        NodeTransition::ToEnd => {
+                            self.current_node = CurrentNode::End;
+                        }
+                        _ => {
+                            return Some(Err(GraphError::InvalidStateTransition(
+                                "Invalid transition from CallTools".to_string(),
+                            )));
+                        }
+                    },
+                    Err(_) => {
+                        // On error, we'll return the error and mark as finished
+                        self.finished = true;
+                    }
+                }
+                result.map(|_| self.current_node.clone())
+            }
+            CurrentNode::End => {
+                let result = End.run(&mut self.state, &self.deps).await;
+
+                // Store the result if we've reached the end
+                if let Some(last_message) = self.state.messages.last() {
+                    if last_message.role == Role::Assistant {
+                        self.result = Some(last_message.content.clone());
+                    }
+                }
+
+                self.finished = true;
+                result.map(|_| self.current_node.clone())
+            }
+        };
+
+        Some(transition_result)
+    }
+
+    /// Get the current state
+    pub fn state(&self) -> &State {
+        &self.state
+    }
+}
+
 /// The graph runner
 pub struct GraphRunner<P: Provider> {
     deps: Deps<P>,
@@ -197,43 +320,19 @@ impl<P: Provider> GraphRunner<P> {
         GraphRunner { deps }
     }
 
-    pub async fn run(&self, input: String) -> std::result::Result<String, GraphError> {
-        let mut state = State {
-            messages: Vec::new(),
-            current_input: input,
-            tool_outputs: HashMap::new(),
+    /// Create a new graph iterator
+    pub fn create_iter(&self, user_prompt: String) -> GraphIter<P>
+    where
+        P: Clone,
+    {
+        let deps = Deps {
+            provider: self.deps.provider.clone(),
+            tools: self.deps.tools.clone(),
+            system_prompt: self.deps.system_prompt.clone(),
+            max_tokens: self.deps.max_tokens,
+            temperature: self.deps.temperature,
         };
 
-        // Start with the Start node and progress through the state machine
-        let mut current_transition = Start.run(&mut state, &self.deps).await?;
-
-        loop {
-            match current_transition {
-                NodeTransition::ToUserRequest => {
-                    current_transition = UserRequest.run(&mut state, &self.deps).await?;
-                }
-                NodeTransition::ToCallTools => {
-                    current_transition = CallTools.run(&mut state, &self.deps).await?;
-                }
-                NodeTransition::ToEnd => {
-                    // Run the End node and then exit the loop
-                    End.run(&mut state, &self.deps).await?;
-                    break;
-                }
-                NodeTransition::Terminal => {
-                    // This is used by the End node - we've reached a terminal state
-                    break;
-                }
-            }
-        }
-
-        // Return the assistant's response (last message)
-        if let Some(last_message) = state.messages.last() {
-            if last_message.role == Role::Assistant {
-                return Ok(last_message.content.clone());
-            }
-        }
-
-        Err(GraphError::Other(anyhow!("No assistant response found")))
+        GraphIter::new(deps, user_prompt)
     }
 }

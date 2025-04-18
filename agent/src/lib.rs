@@ -1,8 +1,9 @@
-use anyhow::Result;
 use providers::{Provider, Tool};
 
 pub mod graph;
-pub use graph::{Deps, GraphError, GraphRunner, NodeRunner, NodeTransition, State};
+pub use graph::{
+    CurrentNode, Deps, GraphError, GraphIter, GraphRunner, NodeRunner, NodeTransition, State,
+};
 
 pub struct Agent<P: Provider> {
     provider: P,
@@ -13,14 +14,14 @@ impl<P: Provider> Agent<P> {
         Agent { provider }
     }
 
-    /// Process input using the graph-based state machine
-    pub async fn run(
+    /// Process input using the graph-based state machine and return an iterator
+    pub fn iter(
         &self,
-        input: &str,
+        user_prompt: &str,
         system_prompt: &str,
         max_tokens: u32,
         temperature: Option<f64>,
-    ) -> std::result::Result<String, GraphError>
+    ) -> GraphIter<P>
     where
         P: Clone,
     {
@@ -43,6 +44,6 @@ impl<P: Provider> Agent<P> {
             Some(tools),
         );
 
-        graph_runner.run(input.to_string()).await
+        graph_runner.create_iter(user_prompt.to_string())
     }
 }

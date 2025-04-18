@@ -1,14 +1,14 @@
-use agent::Agent;
+use agent::{Agent, CurrentNode};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use providers::claude::ClaudeProvider;
 use providers::Provider;
 use std::io::{self, Write};
 
+// Constants for the process_input_with_graph parameters
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an AI assistant helping with code editing tasks. \
 The user will provide a request, and you can use tools to help them. \
 Always explain what you're doing before using tools.";
-
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 const DEFAULT_TEMPERATURE: f64 = 0.7;
 
@@ -69,21 +69,59 @@ async fn main() -> Result<()> {
                 println!("Working directory set to: {}", dir_path);
             }
 
-            let response = agent
-                .run(
-                    prompt,
-                    DEFAULT_SYSTEM_PROMPT,
-                    DEFAULT_MAX_TOKENS,
-                    Some(DEFAULT_TEMPERATURE),
-                )
-                .await
-                .map_err(|e| anyhow::anyhow!("Graph processing error: {:?}", e))?;
-            println!("{}", response);
+            execute_with_graph_iter(&agent, prompt).await?;
         }
         None => {
             // Default to interactive mode if no command specified
             interactive_loop(&agent).await?;
         }
+    }
+
+    Ok(())
+}
+
+async fn execute_with_graph_iter<P: Provider>(agent: &Agent<P>, input: &str) -> Result<()>
+where
+    P: Clone,
+{
+    println!("Processing input: {}", input);
+
+    // Create graph iterator
+    let mut graph_iter = agent.iter(
+        input,
+        DEFAULT_SYSTEM_PROMPT,
+        DEFAULT_MAX_TOKENS,
+        Some(DEFAULT_TEMPERATURE),
+    );
+
+    // Process each node
+    while let Some(node_result) = graph_iter.next().await {
+        match node_result {
+            Ok(node) => {
+                println!("Processing node: {:?}", node);
+
+                // Special handling for UserRequest node
+                if matches!(node, CurrentNode::UserRequest) {
+                    // Get the last message from the state which will be the response
+                    if let Some(last_message) = graph_iter.state().messages.last() {
+                        if last_message.role == providers::Role::Assistant {
+                            println!("Response received: {}", last_message.content);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error processing node: {:?}", e);
+                return Err(anyhow::anyhow!("Graph processing error: {:?}", e));
+            }
+        }
+    }
+
+    // Get the final result
+    if let Some(result) = graph_iter.get_result() {
+        println!("Final result: {}", result);
+    } else {
+        println!("No final result available");
     }
 
     Ok(())
@@ -111,17 +149,9 @@ where
             continue;
         }
 
-        match agent
-            .run(
-                input,
-                DEFAULT_SYSTEM_PROMPT,
-                DEFAULT_MAX_TOKENS,
-                Some(DEFAULT_TEMPERATURE),
-            )
-            .await
-        {
-            Ok(response) => println!("{}", response),
-            Err(e) => eprintln!("Error: {:?}", e),
+        // Use the graph iterator
+        if let Err(e) = execute_with_graph_iter(agent, input).await {
+            eprintln!("Error: {}", e);
         }
     }
 
