@@ -1,54 +1,22 @@
+use crate::models::{Provider, ProviderResponse, StopReason, Tool};
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use serde::{Deserialize, Serialize};
 
-use crate::{Provider, ProviderResponse, StopReason, Tool};
+use super::models::{ClaudeModel, ClaudeRequest, Message};
 
 pub struct ClaudeProvider {
     api_key: String,
     client: reqwest::Client,
-    model: String,
-}
-
-#[derive(Debug, Serialize)]
-struct ClaudeRequest {
-    model: String,
-    max_tokens: u32,
-    messages: Vec<Message>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    tools: Option<Vec<Tool>>,
-}
-
-impl std::fmt::Display for ClaudeRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "ClaudeRequest {{ model: {}, max_tokens: {} }}",
-            self.model, self.max_tokens
-        )
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Message {
-    role: String,
-    content: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct Content {
-    text: String,
-    #[serde(rename = "type")]
-    content_type: String,
+    model: ClaudeModel,
 }
 
 impl Provider for ClaudeProvider {
-    fn new(api_key: String) -> Self {
-        ClaudeProvider {
+    fn new(api_key: String, model: String) -> Result<Self> {
+        Ok(ClaudeProvider {
             api_key,
             client: reqwest::Client::new(),
-            model: "claude-3-7-sonnet-20250219".to_string(), // Default model
-        }
+            model: model.try_into()?,
+        })
     }
 
     async fn send_prompt(
@@ -66,8 +34,12 @@ impl Provider for ClaudeProvider {
             content: prompt.to_string(),
         }];
 
+        // Create Claude request directly to avoid conversion issues
+        let model = ClaudeModel::try_from(self.model.clone())?;
         let request = ClaudeRequest {
-            model: self.model.clone(),
+            system_prompt: String::new(),
+            temperature: None,
+            model,
             max_tokens: 1024,
             messages,
             tools,

@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
     })?;
 
     // Create provider and agent
-    let provider = ClaudeProvider::new(api_key);
+    let provider = ClaudeProvider::new(api_key, "claude-3-7-sonnet-20250219".to_string())?;
     let agent = Agent::new(provider);
 
     // Handle commands
