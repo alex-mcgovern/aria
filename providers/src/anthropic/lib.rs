@@ -1,23 +1,23 @@
 use crate::{
-    claude::models::{AnthropicContentBlock, AnthropicRole},
+    anthropic::models::{AnthropicContentBlock, AnthropicRole},
     models::{Provider, Response, ResponseContent, StopReason},
 };
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use tools::ToolType;
 
-use super::models::{AnthropicMessage, AnthropicMessageContent, AnthropicModel, AnthropicRequest};
+use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest};
 
 #[derive(Clone)]
-pub struct ClaudeProvider {
+pub struct AnthropicProvider {
     api_key: String,
     client: reqwest::Client,
     model: AnthropicModel,
 }
 
-impl Provider for ClaudeProvider {
+impl Provider for AnthropicProvider {
     fn new(api_key: String, model: String) -> Result<Self> {
-        Ok(ClaudeProvider {
+        Ok(AnthropicProvider {
             api_key,
             client: reqwest::Client::new(),
             model: model.try_into()?,
@@ -30,7 +30,6 @@ impl Provider for ClaudeProvider {
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        // Create a text content block
         let text_block = AnthropicContentBlock::Text {
             text: prompt.to_string(),
         };
@@ -56,7 +55,6 @@ impl Provider for ClaudeProvider {
             })
             .transpose()?;
 
-        // Create Claude request directly to avoid conversion issues
         let request = AnthropicRequest {
             system_prompt: String::new(),
             temperature: None,
@@ -73,20 +71,20 @@ impl Provider for ClaudeProvider {
             .json(&request)
             .send()
             .await
-            .context("Failed to send request to Claude API")?;
+            .context("Failed to send request to Anthropic API")?;
 
         let response_json: serde_json::Value = response
             .json()
             .await
-            .context("Failed to parse Claude API response")?;
+            .context("Failed to parse Anthropic API response")?;
 
         // Extract content based on type
         let content_array = response_json["content"]
             .as_array()
-            .ok_or_else(|| anyhow::anyhow!("Content is not an array in Claude response"))?;
+            .ok_or_else(|| anyhow::anyhow!("Content is not an array in Anthropic response"))?;
 
         if content_array.is_empty() {
-            return Err(anyhow::anyhow!("Empty content array in Claude response"));
+            return Err(anyhow::anyhow!("Empty content array in Anthropic response"));
         }
 
         let first_content = &content_array[0];

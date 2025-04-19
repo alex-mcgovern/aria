@@ -1,4 +1,4 @@
-pub mod claude;
+pub mod anthropic;
 pub mod models;
 
 // Re-export common types and traits from models
@@ -7,5 +7,5 @@ pub use models::{
     StopReason,
 };
 
-// Re-export the ClaudeProvider for easier access
-pub use claude::ClaudeProvider;
+// Re-export the AnthropicProvider for easier access
+pub use anthropic::AnthropicProvider;

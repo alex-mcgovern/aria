@@ -27,7 +27,7 @@ impl TryFrom<String> for AnthropicModel {
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
             "claude-3-7-sonnet-20250219" => Ok(AnthropicModel::Claude37Sonnet),
-            _ => Err(anyhow::anyhow!("Unknown Claude model: {}", value)),
+            _ => Err(anyhow::anyhow!("Unknown Anthropic model: {}", value)),
         }
     }
 }
@@ -266,7 +266,7 @@ impl std::fmt::Display for AnthropicRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "ClaudeRequest {{ model: {}, max_tokens: {} }}",
+            "AnthropicRequest {{ model: {}, max_tokens: {} }}",
             self.model.to_string(),
             self.max_tokens
         )

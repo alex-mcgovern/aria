@@ -2,7 +2,7 @@ use agent::{Agent, CurrentNode};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use providers::Provider;
-use providers::{claude::ClaudeProvider, models::ContentBlock, Role};
+use providers::{anthropic::AnthropicProvider, models::ContentBlock, Role};
 use std::io::{self, Write};
 
 // Constants for the process_input_with_graph parameters
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
     })?;
 
     // Create provider and agent
-    let provider = ClaudeProvider::new(api_key, "claude-3-7-sonnet-20250219".to_string())?;
+    let provider = AnthropicProvider::new(api_key, "claude-3-7-sonnet-20250219".to_string())?;
     let agent = Agent::new(provider);
 
     // Handle commands
