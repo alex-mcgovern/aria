@@ -1,11 +1,11 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
-use utoipa::ToSchema;
 
 /// Input parameters for the write_file tool
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, JsonSchema)]
 pub struct WriteFileInput {
     /// The path of the file to write
     pub path: String,
@@ -18,7 +18,7 @@ pub struct WriteFileInput {
 pub struct WriteFileTool;
 
 #[async_trait]
-impl Tool<'_, WriteFileInput> for WriteFileTool {
+impl Tool<WriteFileInput> for WriteFileTool {
     fn title(&self) -> &'static str {
         "write_file"
     }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
-use utoipa::ToSchema;
+use schemars::{schema_for, JsonSchema};
+use serde::de::Error as SerdeError; // Add this import to use the custom() method
 
 #[derive(Debug)]
 pub enum ToolError {
@@ -38,7 +39,7 @@ pub enum ToolContent {
 
 /// Trait defining the interface for all tools
 #[async_trait]
-pub trait Tool<'a, T: ToSchema<'a>> {
+pub trait Tool<T: JsonSchema> {
     /// Executes the tool with the provided input
     async fn run(&self, input: T) -> ToolResult;
 
@@ -50,10 +51,29 @@ pub trait Tool<'a, T: ToSchema<'a>> {
 
     /// Returns the OpenAPI schema for the input type
     fn input_schema(&self) -> Result<String, ToolError> {
-        let openapi = utoipa::openapi::OpenApiBuilder::new().build();
-        openapi
-            .to_json()
-            .map_err(|e| ToolError::InputSchemaSerializationError(e))
+        // Generate the schema using schemars
+        let schema = schema_for!(T);
+        let schema_json = serde_json::to_value(&schema)
+            .map_err(|e| ToolError::InputSchemaSerializationError(e))?;
+
+        // Extract only the required fields from the schema
+        let obj = schema_json.as_object().ok_or_else(|| {
+            ToolError::InputSchemaSerializationError(SerdeError::custom("Invalid schema structure"))
+        })?;
+
+        let filtered = serde_json::json!({
+            "type": obj.get("type").ok_or_else(|| ToolError::InputSchemaSerializationError(
+            SerdeError::custom("Missing type field")
+            ))?,
+            "properties": obj.get("properties").ok_or_else(|| ToolError::InputSchemaSerializationError(
+            SerdeError::custom("Missing properties field")
+            ))?,
+            "required": obj.get("required").ok_or_else(|| ToolError::InputSchemaSerializationError(
+            SerdeError::custom("Missing required field")
+            ))?
+        });
+
+        serde_json::to_string(&filtered).map_err(|e| ToolError::InputSchemaSerializationError(e))
     }
 
     /// Returns a JSON representation of the tool's metadata and schema

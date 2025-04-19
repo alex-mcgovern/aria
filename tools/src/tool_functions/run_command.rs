@@ -1,11 +1,11 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-use utoipa::ToSchema;
 
 /// Input parameters for the run_command tool
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, JsonSchema)]
 pub struct RunCommandInput {
     /// The command to run
     pub cmd: String,
@@ -18,7 +18,7 @@ pub struct RunCommandInput {
 pub struct RunCommandTool;
 
 #[async_trait]
-impl Tool<'_, RunCommandInput> for RunCommandTool {
+impl Tool<RunCommandInput> for RunCommandTool {
     fn title(&self) -> &'static str {
         "run_command"
     }

@@ -9,4 +9,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 async-trait = "0.1.68"
-utoipa = "3.5.0"
+schemars = { version = "0.8.22", features = ["derive"] }

@@ -1,11 +1,11 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
-use utoipa::ToSchema;
 
 /// Input parameters for the tree tool
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, JsonSchema)]
 pub struct TreeInput {
     /// The directory path to list files from recursively
     pub dir: String,
@@ -16,7 +16,7 @@ pub struct TreeInput {
 pub struct TreeTool;
 
 #[async_trait]
-impl Tool<'_, TreeInput> for TreeTool {
+impl Tool<TreeInput> for TreeTool {
     fn title(&self) -> &'static str {
         "tree"
     }

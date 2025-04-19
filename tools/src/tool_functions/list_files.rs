@@ -1,11 +1,11 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use utoipa::ToSchema;
 
 /// Input parameters for the list_files tool
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, JsonSchema)]
 pub struct ListFilesInput {
     /// The directory path to list files from
     pub dir: String,
@@ -16,7 +16,7 @@ pub struct ListFilesInput {
 pub struct ListFilesTool;
 
 #[async_trait]
-impl Tool<'_, ListFilesInput> for ListFilesTool {
+impl Tool<ListFilesInput> for ListFilesTool {
     fn title(&self) -> &'static str {
         "list_files"
     }

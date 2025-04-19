@@ -1,11 +1,11 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use utoipa::ToSchema;
 
 /// Input parameters for the read_file tool
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, JsonSchema)]
 pub struct ReadFileInput {
     /// The path of the file to read
     pub path: String,
@@ -16,7 +16,7 @@ pub struct ReadFileInput {
 pub struct ReadFileTool;
 
 #[async_trait]
-impl Tool<'_, ReadFileInput> for ReadFileTool {
+impl Tool<ReadFileInput> for ReadFileTool {
     fn title(&self) -> &'static str {
         "read_file"
     }
