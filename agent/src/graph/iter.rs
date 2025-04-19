@@ -1,5 +1,5 @@
 use crate::graph::models::{CurrentNode, Deps, GraphError, NodeRunner, NodeTransition, State};
-use crate::graph::nodes::{CallTools, End, Start, UserRequest};
+use crate::graph::nodes::{CallTools, End, ModelRequest, Start, UserRequest};
 use providers::{models::ContentBlock, Provider, Role};
 
 /// A struct to hold the state of a graph iteration
@@ -15,7 +15,7 @@ impl<P: Provider> GraphIter<P> {
     /// Create a new graph iterator
     pub fn new(deps: Deps<P>, user_prompt: String) -> Self {
         let state = State {
-            messages: Vec::new(),
+            message_history: Vec::new(),
             current_user_prompt: user_prompt,
             tool_outputs: std::collections::HashMap::new(),
         };
@@ -50,11 +50,8 @@ impl<P: Provider> GraphIter<P> {
                 let result = UserRequest.run(&mut self.state, &self.deps).await;
                 match &result {
                     Ok(transition) => match transition {
-                        NodeTransition::ToCallTools => {
-                            self.current_node = CurrentNode::CallTools;
-                        }
-                        NodeTransition::ToEnd => {
-                            self.current_node = CurrentNode::End;
+                        NodeTransition::ToModelRequest => {
+                            self.current_node = CurrentNode::ModelRequest;
                         }
                         _ => {
                             return Some(Err(GraphError::InvalidStateTransition(
@@ -69,12 +66,35 @@ impl<P: Provider> GraphIter<P> {
                 }
                 result.map(|_| self.current_node.clone())
             }
+            CurrentNode::ModelRequest => {
+                let result = ModelRequest.run(&mut self.state, &self.deps).await;
+                match &result {
+                    Ok(transition) => match transition {
+                        NodeTransition::ToCallTools => {
+                            self.current_node = CurrentNode::CallTools;
+                        }
+                        NodeTransition::ToEnd => {
+                            self.current_node = CurrentNode::End;
+                        }
+                        _ => {
+                            return Some(Err(GraphError::InvalidStateTransition(
+                                "Invalid transition from ModelRequest".to_string(),
+                            )));
+                        }
+                    },
+                    Err(_) => {
+                        // On error, we'll return the error and mark as finished
+                        self.finished = true;
+                    }
+                }
+                result.map(|_| self.current_node.clone())
+            }
             CurrentNode::CallTools => {
                 let result = CallTools.run(&mut self.state, &self.deps).await;
                 match &result {
                     Ok(transition) => match transition {
-                        NodeTransition::ToUserRequest => {
-                            self.current_node = CurrentNode::UserRequest;
+                        NodeTransition::ToModelRequest => {
+                            self.current_node = CurrentNode::ModelRequest;
                         }
                         NodeTransition::ToEnd => {
                             self.current_node = CurrentNode::End;
@@ -96,7 +116,7 @@ impl<P: Provider> GraphIter<P> {
                 let result = End.run(&mut self.state, &self.deps).await;
 
                 // Store the result if we've reached the end
-                if let Some(last_message) = self.state.messages.last() {
+                if let Some(last_message) = self.state.message_history.last() {
                     if last_message.role == Role::Assistant {
                         // Look for text blocks in the content array
                         for content_block in &last_message.content {

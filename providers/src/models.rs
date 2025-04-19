@@ -98,9 +98,9 @@ pub trait Provider {
         Self: Sized;
 
     /// Send a prompt to the provider and get a response
-    fn send_prompt(
+    fn sync(
         &self,
-        prompt: &str,
+        messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
     ) -> impl std::future::Future<Output = Result<Response>> + Send;
 }

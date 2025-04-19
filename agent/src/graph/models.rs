@@ -36,7 +36,7 @@ impl From<anyhow::Error> for GraphError {
 /// State shared between nodes
 #[derive(Debug)]
 pub struct State {
-    pub messages: Vec<Message>,
+    pub message_history: Vec<Message>,
     pub current_user_prompt: String,
     pub tool_outputs: HashMap<String, String>,
 }
@@ -65,6 +65,7 @@ pub trait NodeRunner<P: Provider>: Debug {
 #[derive(Debug)]
 pub enum NodeTransition {
     ToUserRequest,
+    ToModelRequest,
     ToCallTools,
     ToEnd,
     Terminal,
@@ -75,6 +76,7 @@ pub enum NodeTransition {
 pub enum CurrentNode {
     Start,
     UserRequest,
+    ModelRequest,
     CallTools,
     End,
 }

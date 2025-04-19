@@ -1,6 +1,7 @@
 use crate::{
     anthropic::models::{AnthropicContentBlock, AnthropicRole},
     models::{Provider, Response, ResponseContent, StopReason},
+    Message,
 };
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
@@ -24,22 +25,21 @@ impl Provider for AnthropicProvider {
         })
     }
 
-    async fn send_prompt(&self, prompt: &str, tools: Option<Vec<ToolType>>) -> Result<Response> {
+    async fn sync(
+        &self,
+        messages: &Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> Result<Response> {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        let text_block = AnthropicContentBlock::Text {
-            text: prompt.to_string(),
-        };
+        let messages: Vec<AnthropicMessage> = messages
+            .iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
 
-        let messages = vec![AnthropicMessage {
-            role: AnthropicRole::User,
-            content: vec![text_block],
-        }];
-
-        // Convert tools to array of JSON schemas
         let tools = tools
             .map(|tools| {
                 tools

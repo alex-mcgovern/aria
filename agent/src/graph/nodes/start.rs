@@ -12,7 +12,7 @@ impl<P: Provider> NodeRunner<P> for Start {
         _deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
         // Setup initial state with user input
-        state.messages.push(providers::Message {
+        state.message_history.push(providers::Message {
             role: Role::User,
             content: vec![ContentBlock::Text {
                 text: state.current_user_prompt.clone(),

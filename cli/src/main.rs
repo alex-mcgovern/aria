@@ -102,7 +102,7 @@ where
 
                 // Special handling for UserRequest node
                 if matches!(node, CurrentNode::UserRequest) {
-                    if let Some(last_message) = graph_iter.state().messages.last() {
+                    if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
                             // Look for text content in the array
                             for content_block in &last_message.content {

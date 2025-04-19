@@ -134,6 +134,23 @@ impl TryFrom<Message> for AnthropicMessage {
     }
 }
 
+impl TryFrom<&Message> for AnthropicMessage {
+    type Error = anyhow::Error;
+
+    fn try_from(message: &Message) -> Result<Self> {
+        let content: Result<Vec<_>, _> = message
+            .content
+            .iter()
+            .map(|cb| cb.clone().try_into())
+            .collect();
+
+        Ok(AnthropicMessage {
+            role: message.role.clone().try_into()?,
+            content: content?,
+        })
+    }
+}
+
 #[serde_as]
 #[derive(Debug, Serialize)]
 pub struct AnthropicRequest {
