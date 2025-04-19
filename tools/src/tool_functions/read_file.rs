@@ -1,6 +1,6 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use utoipa::ToSchema;
 
@@ -12,6 +12,7 @@ pub struct ReadFileInput {
 }
 
 /// Tool for reading file contents
+#[derive(Debug, Serialize, Clone)]
 pub struct ReadFileTool;
 
 #[async_trait]

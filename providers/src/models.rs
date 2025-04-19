@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use tools::ToolType;
 
 /// Represents the role of the message sender
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -33,7 +34,7 @@ pub struct Request {
     pub max_tokens: u32,
     pub messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<Tool>>,
+    pub tools: Option<Vec<ToolType>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,15 +50,6 @@ pub struct ProviderResponse {
     pub stop_reason: Option<StopReason>,
 }
 
-/// Represents a tool that can be used by the LLM
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Tool {
-    pub name: String,
-    pub description: String,
-    #[serde(rename = "input_schema")]
-    pub input_schema: serde_json::Value,
-}
-
 /// A trait for LLM providers
 pub trait Provider {
     /// Initialize the provider with API keys and other configuration
@@ -69,6 +61,6 @@ pub trait Provider {
     fn send_prompt(
         &self,
         prompt: &str,
-        tools: Option<Vec<Tool>>,
+        tools: Option<Vec<ToolType>>,
     ) -> impl std::future::Future<Output = Result<ProviderResponse>> + Send;
 }

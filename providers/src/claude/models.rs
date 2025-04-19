@@ -1,6 +1,8 @@
-use crate::models::{Request as GenericRequest, Role, Tool};
-use anyhow::Result;
+use crate::models::{Request as GenericRequest, Role};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use tools::ToolType;
 
 #[derive(Debug, Clone)]
 pub enum ClaudeModel {
@@ -37,7 +39,7 @@ pub struct ClaudeRequest {
     pub max_tokens: u32,
     pub messages: Vec<Message>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Vec<Tool>>,
+    pub tools: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,13 +71,29 @@ impl TryFrom<GenericRequest> for ClaudeRequest {
             })
             .collect();
 
+        let tools = req
+            .tools
+            .map(|tools| {
+                tools
+                    .into_iter()
+                    .map(|tool| {
+                        tool.to_json_schema()
+                            .map_err(anyhow::Error::from)
+                            .and_then(|schema| {
+                                serde_json::from_str(&schema).context("Failed to parse JSON schema")
+                            })
+                    })
+                    .collect::<Result<Vec<serde_json::Value>>>()
+            })
+            .transpose()?;
+
         Ok(ClaudeRequest {
             system_prompt: req.system_prompt,
             temperature: req.temperature,
             model: req.model.try_into()?,
             max_tokens: req.max_tokens,
             messages,
-            tools: req.tools,
+            tools,
         })
     }
 }

@@ -1,6 +1,7 @@
-use crate::models::{Provider, ProviderResponse, StopReason, Tool};
+use crate::models::{Provider, ProviderResponse, StopReason};
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
+use tools::ToolType;
 
 use super::models::{ClaudeModel, ClaudeRequest, Message};
 
@@ -23,7 +24,7 @@ impl Provider for ClaudeProvider {
     async fn send_prompt(
         &self,
         prompt: &str,
-        tools: Option<Vec<Tool>>,
+        tools: Option<Vec<ToolType>>,
     ) -> Result<ProviderResponse> {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
@@ -34,6 +35,22 @@ impl Provider for ClaudeProvider {
             role: "user".to_string(),
             content: prompt.to_string(),
         }];
+
+        // Convert tools to array of JSON schemas
+        let tools = tools
+            .map(|tools| {
+                tools
+                    .into_iter()
+                    .map(|tool| {
+                        tool.to_json_schema()
+                            .map_err(anyhow::Error::from)
+                            .and_then(|schema| {
+                                serde_json::from_str(&schema).context("Failed to parse JSON schema")
+                            })
+                    })
+                    .collect::<Result<Vec<serde_json::Value>>>()
+            })
+            .transpose()?;
 
         // Create Claude request directly to avoid conversion issues
         let model = ClaudeModel::try_from(self.model.clone())?;

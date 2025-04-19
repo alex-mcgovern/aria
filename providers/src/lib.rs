@@ -1,8 +1,8 @@
-pub mod models;
 pub mod claude;
+pub mod models;
 
 // Re-export common types and traits from models
-pub use models::{Provider, ProviderResponse, Role, StopReason, Tool, Message, Request};
+pub use models::{Message, Provider, ProviderResponse, Request, Role, StopReason};
 
 // Re-export the ClaudeProvider for easier access
 pub use claude::ClaudeProvider;

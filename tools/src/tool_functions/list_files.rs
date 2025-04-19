@@ -1,6 +1,6 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use utoipa::ToSchema;
 
@@ -12,6 +12,7 @@ pub struct ListFilesInput {
 }
 
 /// Tool for listing all files in a directory
+#[derive(Debug, Serialize, Clone)]
 pub struct ListFilesTool;
 
 #[async_trait]

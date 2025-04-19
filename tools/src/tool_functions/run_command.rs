@@ -1,6 +1,6 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::process::Command;
 use utoipa::ToSchema;
 
@@ -14,6 +14,7 @@ pub struct RunCommandInput {
 }
 
 /// Tool for executing shell commands
+#[derive(Debug, Serialize, Clone)]
 pub struct RunCommandTool;
 
 #[async_trait]

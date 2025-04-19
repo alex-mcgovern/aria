@@ -7,6 +7,21 @@ pub enum ToolError {
     JsonSchemaSerializationError(serde_json::Error),
 }
 
+impl std::fmt::Display for ToolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InputSchemaSerializationError(e) => {
+                write!(f, "Input schema serialization error: {}", e)
+            }
+            Self::JsonSchemaSerializationError(e) => {
+                write!(f, "JSON schema serialization error: {}", e)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ToolError {}
+
 /// A struct to represent the result of tool operations
 #[derive(Debug)]
 pub struct ToolResult {

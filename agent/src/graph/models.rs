@@ -1,6 +1,7 @@
-use providers::{Message, Provider, Tool};
+use providers::{Message, Provider};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
+use tools::ToolType;
 
 /// Custom error type for the graph
 #[derive(Debug)]
@@ -43,7 +44,7 @@ pub struct State {
 /// Dependencies that nodes need to function
 pub struct Deps<P: Provider> {
     pub provider: P,
-    pub tools: Option<Vec<Tool>>,
+    pub tools: Option<Vec<ToolType>>,
     pub system_prompt: String,
     pub max_tokens: u32,
     pub temperature: Option<f64>,

@@ -1,7 +1,8 @@
-use providers::{Provider, Tool};
+use providers::Provider;
 
 pub mod graph;
 pub use graph::{CurrentNode, Deps, GraphError, GraphIter, NodeRunner, NodeTransition, State};
+use tools::{ListFilesTool, ReadFileTool, RunCommandTool, ToolType, TreeTool, WriteFileTool};
 
 pub struct Agent<P: Provider> {
     provider: P,
@@ -23,16 +24,13 @@ impl<P: Provider> Agent<P> {
     where
         P: Clone,
     {
-        // Create tool definitions for the provider
-        let tool_schemas = tools::get_tool_schemas();
-        let tools: Vec<Tool> = tool_schemas
-            .into_iter()
-            .map(|schema| Tool {
-                name: schema["name"].as_str().unwrap().to_string(),
-                description: schema["description"].as_str().unwrap().to_string(),
-                input_schema: schema["input_schema"].clone(),
-            })
-            .collect();
+        let tools: Vec<ToolType> = vec![
+            ToolType::ListFiles(ListFilesTool),
+            ToolType::ReadFile(ReadFileTool),
+            ToolType::RunCommand(RunCommandTool),
+            ToolType::Tree(TreeTool),
+            ToolType::WriteFile(WriteFileTool),
+        ];
 
         // Create the dependencies for GraphIter
         let deps = Deps {

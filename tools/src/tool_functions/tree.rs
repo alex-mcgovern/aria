@@ -1,6 +1,6 @@
 use crate::models::{Tool, ToolContent, ToolResult};
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 use utoipa::ToSchema;
 
@@ -12,6 +12,7 @@ pub struct TreeInput {
 }
 
 /// Tool for recursively listing all files in a directory and its subdirectories
+#[derive(Debug, Serialize, Clone)]
 pub struct TreeTool;
 
 #[async_trait]
