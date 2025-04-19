@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 
 /// Input parameters for the list_files tool
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Debug)]
 pub struct ListFilesInput {
     /// The directory path to list files from
     pub dir: String,

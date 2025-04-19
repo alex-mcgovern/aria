@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 /// Input parameters for the write_file tool
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Debug)]
 pub struct WriteFileInput {
     /// The path of the file to write
     pub path: String,

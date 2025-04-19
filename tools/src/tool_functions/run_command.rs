@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 /// Input parameters for the run_command tool
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Debug)]
 pub struct RunCommandInput {
     /// The command to run
     pub cmd: String,

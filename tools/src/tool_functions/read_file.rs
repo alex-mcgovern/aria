@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 
 /// Input parameters for the read_file tool
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Debug)]
 pub struct ReadFileInput {
     /// The path of the file to read
     pub path: String,

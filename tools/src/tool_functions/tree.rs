@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 /// Input parameters for the tree tool
-#[derive(Deserialize, JsonSchema)]
+#[derive(Deserialize, JsonSchema, Debug)]
 pub struct TreeInput {
     /// The directory path to list files from recursively
     pub dir: String,

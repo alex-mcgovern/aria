@@ -78,18 +78,38 @@ impl From<ToolName> for String {
     }
 }
 
-/// A struct to represent the result of tool operations
-#[derive(Debug)]
-pub struct ToolResult {
-    pub is_error: bool,
-    pub content: ToolContent,
-}
-
 /// Represents either a single string or an array of strings
 #[derive(Debug)]
 pub enum ToolContent {
     String(String),
     StringArray(Vec<String>),
+}
+
+impl std::fmt::Display for ToolContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            ToolContent::String(s) => write!(f, "{}", s),
+            ToolContent::StringArray(arr) => {
+                write!(f, "[")?;
+                let mut is_first = true;
+                for item in arr {
+                    if !is_first {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                    is_first = false;
+                }
+                write!(f, "]")
+            }
+        }
+    }
+}
+
+/// A struct to represent the result of tool operations
+#[derive(Debug)]
+pub struct ToolResult {
+    pub is_error: bool,
+    pub content: ToolContent,
 }
 
 /// Trait defining the interface for all tools
