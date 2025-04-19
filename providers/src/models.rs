@@ -21,6 +21,9 @@ pub enum ContentBlock {
         tool_use_id: String,
         content: String,
     },
+    /// Plain text content
+    #[serde(rename = "text")]
+    Text { text: String },
 }
 
 /// Represents the content of a message, which can either be plain text or a tool result
@@ -36,7 +39,7 @@ pub enum MessageContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Message {
     pub role: Role,
-    pub content: MessageContent,
+    pub content: Vec<ContentBlock>,
 }
 
 #[derive(Debug, Serialize)]

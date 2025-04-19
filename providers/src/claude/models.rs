@@ -5,6 +5,7 @@ use crate::{
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::{serde_as, DisplayFromStr};
 use tools::models::ToolName;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -12,10 +13,10 @@ pub enum AnthropicModel {
     Claude37Sonnet,
 }
 
-impl ToString for AnthropicModel {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for AnthropicModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AnthropicModel::Claude37Sonnet => "claude-3-7-sonnet-20250219".to_string(),
+            AnthropicModel::Claude37Sonnet => write!(f, "claude-3-7-sonnet-20250219"),
         }
     }
 }
@@ -61,6 +62,9 @@ pub enum AnthropicContentBlock {
         tool_use_id: String,
         content: String,
     },
+    /// Plain text content
+    #[serde(rename = "text")]
+    Text { text: String },
 }
 
 impl TryFrom<ContentBlock> for AnthropicContentBlock {
@@ -75,6 +79,7 @@ impl TryFrom<ContentBlock> for AnthropicContentBlock {
                 tool_use_id,
                 content,
             }),
+            ContentBlock::Text { text } => Ok(AnthropicContentBlock::Text { text }),
         }
     }
 }
@@ -109,26 +114,34 @@ impl TryFrom<MessageContent> for AnthropicMessageContent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicMessage {
     pub role: AnthropicRole,
-    pub content: AnthropicMessageContent,
+    pub content: Vec<AnthropicContentBlock>,
 }
 
 impl TryFrom<Message> for AnthropicMessage {
     type Error = anyhow::Error;
 
     fn try_from(message: Message) -> Result<Self, Self::Error> {
+        let content: Result<Vec<_>, _> = message
+            .content
+            .into_iter()
+            .map(AnthropicContentBlock::try_from)
+            .collect();
+
         Ok(AnthropicMessage {
             role: message.role.try_into()?,
-            content: message.content.try_into()?,
+            content: content?,
         })
     }
 }
 
+#[serde_as]
 #[derive(Debug, Serialize)]
 pub struct AnthropicRequest {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub system_prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f64>,
+    #[serde_as(as = "DisplayFromStr")]
     pub model: AnthropicModel,
     pub max_tokens: u32,
     pub messages: Vec<AnthropicMessage>,

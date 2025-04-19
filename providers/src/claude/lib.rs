@@ -1,5 +1,5 @@
 use crate::{
-    claude::models::AnthropicRole,
+    claude::models::{AnthropicContentBlock, AnthropicRole},
     models::{Provider, Response, ResponseContent, StopReason},
 };
 use anyhow::{Context, Result};
@@ -30,36 +30,40 @@ impl Provider for ClaudeProvider {
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
+        // Create a text content block
+        let text_block = AnthropicContentBlock::Text {
+            text: prompt.to_string(),
+        };
+
         let messages = vec![AnthropicMessage {
             role: AnthropicRole::User,
-            content: AnthropicMessageContent::Text(prompt.to_string()),
+            content: vec![text_block],
         }];
 
-        // // Convert tools to array of JSON schemas
-        // let tools = tools
-        //     .map(|tools| {
-        //         tools
-        //             .into_iter()
-        //             .map(|tool| {
-        //                 tool.to_json_schema()
-        //                     .map_err(anyhow::Error::from)
-        //                     .and_then(|schema| {
-        //                         serde_json::from_str(&schema).context("Failed to parse JSON schema")
-        //                     })
-        //             })
-        //             .collect::<Result<Vec<serde_json::Value>>>()
-        //     })
-        //     .transpose()?;
+        // Convert tools to array of JSON schemas
+        let tools = tools
+            .map(|tools| {
+                tools
+                    .into_iter()
+                    .map(|tool| {
+                        tool.to_json_schema()
+                            .map_err(anyhow::Error::from)
+                            .and_then(|schema| {
+                                serde_json::from_str(&schema).context("Failed to parse JSON schema")
+                            })
+                    })
+                    .collect::<Result<Vec<serde_json::Value>>>()
+            })
+            .transpose()?;
 
         // Create Claude request directly to avoid conversion issues
-        // let model = AnthropicModel::try_from(self.model.clone())?;
         let request = AnthropicRequest {
             system_prompt: String::new(),
             temperature: None,
             model: self.model.clone(),
             max_tokens: 1024,
             messages,
-            tools: None,
+            tools,
         };
 
         let response = self
