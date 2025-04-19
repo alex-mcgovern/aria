@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use serde_with::{serde_as, TryFromInto};
 use tools::{models::ToolName, ToolType};
 
 /// Represents the role of the message sender
@@ -12,6 +13,7 @@ pub enum Role {
 }
 
 /// Represents different types of content items in a message
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ContentBlock {
@@ -21,9 +23,32 @@ pub enum ContentBlock {
         tool_use_id: String,
         content: String,
     },
+
     /// Plain text content
     #[serde(rename = "text")]
     Text { text: String },
+
+    /// A request to use a tool
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        #[serde_as(as = "TryFromInto<String>")]
+        name: ToolName,
+        input: serde_json::Value,
+    },
+}
+
+impl TryFrom<ResponseContentBlock> for ContentBlock {
+    type Error = anyhow::Error;
+
+    fn try_from(value: ResponseContentBlock) -> Result<Self, Self::Error> {
+        match value {
+            ResponseContentBlock::Text { text } => Ok(ContentBlock::Text { text }),
+            ResponseContentBlock::ToolUse { id, name, input } => {
+                Ok(ContentBlock::ToolUse { id, name, input })
+            }
+        }
+    }
 }
 
 /// Represents the content of a message, which can either be plain text or a tool result
@@ -40,6 +65,23 @@ pub enum MessageContent {
 pub struct Message {
     pub role: Role,
     pub content: Vec<ContentBlock>,
+}
+
+impl TryFrom<Response> for Message {
+    type Error = anyhow::Error;
+
+    fn try_from(response: Response) -> Result<Self, Self::Error> {
+        let content = response
+            .content
+            .into_iter()
+            .map(ContentBlock::try_from)
+            .collect::<Result<Vec<ContentBlock>>>()?;
+
+        Ok(Message {
+            role: Role::Assistant,
+            content,
+        })
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -68,26 +110,45 @@ pub enum StopReason {
     ToolUse,
 }
 
-/// Represents the different types of content that can be returned by the model
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
-pub enum ResponseContent {
+pub enum ResponseContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
 
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
+        #[serde_as(as = "TryFromInto<String>")]
         name: ToolName,
         input: serde_json::Value,
     },
 }
 
+/// Represents usage statistics for the API request
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Usage {
+    pub input_tokens: u32,
+    pub output_tokens: u32,
+    #[serde(default)]
+    pub cache_creation_input_tokens: u32,
+    #[serde(default)]
+    pub cache_read_input_tokens: u32,
+}
+
 /// A generic response structure for LLM providers
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Response {
-    pub content: ResponseContent,
+    pub id: String,
+    #[serde(default)]
+    pub r#type: String,
+    pub role: Role,
+    pub model: String,
+    pub content: Vec<ResponseContentBlock>,
     pub stop_reason: Option<StopReason>,
+    pub stop_sequence: Option<String>,
+    pub usage: Usage,
 }
 
 /// A trait for LLM providers

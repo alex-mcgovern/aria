@@ -1,6 +1,6 @@
 use crate::{
-    anthropic::models::{AnthropicContentBlock, AnthropicRole},
-    models::{Provider, Response, ResponseContent, StopReason},
+    anthropic::models::AnthropicResponse,
+    models::{Provider, Response},
     Message,
 };
 use anyhow::{Context, Result};
@@ -73,67 +73,14 @@ impl Provider for AnthropicProvider {
             .await
             .context("Failed to send request to Anthropic API")?;
 
-        let response_json: serde_json::Value = response
+        let anthropic_response: AnthropicResponse = response
             .json()
             .await
             .context("Failed to parse Anthropic API response")?;
 
-        // Extract content based on type
-        let content_array = response_json["content"]
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("Content is not an array in Anthropic response"))?;
+        // Convert the AnthropicResponse to our generic Response type
+        let response: Response = anthropic_response.try_into()?;
 
-        if content_array.is_empty() {
-            return Err(anyhow::anyhow!("Empty content array in Anthropic response"));
-        }
-
-        let first_content = &content_array[0];
-        let content_type = first_content["type"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing type in content"))?;
-
-        let response_content: ResponseContent = match content_type {
-            "text" => {
-                let text = first_content["text"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("Missing text in text content"))?
-                    .to_string();
-                ResponseContent::Text { text }
-            }
-            "tool_use" => {
-                let id = first_content["id"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("Missing id in tool_use content"))?
-                    .to_string();
-                let name = first_content["name"]
-                    .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("Missing name in tool_use content"))?
-                    .to_string();
-                let input = first_content["input"].clone();
-                ResponseContent::ToolUse {
-                    id,
-                    name: name.try_into()?,
-                    input,
-                }
-            }
-            other => return Err(anyhow::anyhow!("Unknown content type: {}", other)),
-        };
-
-        // Extract stop reason
-        let stop_reason = match response_json["stop_reason"].as_str() {
-            Some("end_turn") => Some(StopReason::EndTurn),
-            Some("max_tokens") => Some(StopReason::MaxTokens),
-            Some("stop_sequence") => Some(StopReason::StopSequence),
-            Some("tool_use") => Some(StopReason::ToolUse),
-            Some(other) => return Err(anyhow::anyhow!("Unknown stop reason: {}", other)),
-            None => return Err(anyhow::anyhow!("Missing stop reason in response")),
-        };
-
-        println!("Stop reason: {:?}", stop_reason);
-
-        Ok(Response {
-            content: response_content,
-            stop_reason,
-        })
+        Ok(response)
     }
 }

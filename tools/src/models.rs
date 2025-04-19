@@ -50,6 +50,12 @@ impl ToolName {
     }
 }
 
+impl std::fmt::Display for ToolName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 impl TryFrom<String> for ToolName {
     type Error = ToolError;
 
@@ -62,6 +68,13 @@ impl TryFrom<String> for ToolName {
             "run_command" => Ok(Self::RunCommand),
             _ => Err(ToolError::InvalidToolName(value)),
         }
+    }
+}
+
+// Add the From implementation for converting ToolName to String
+impl From<ToolName> for String {
+    fn from(tool_name: ToolName) -> Self {
+        tool_name.as_str().to_string()
     }
 }
 
