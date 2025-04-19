@@ -1,30 +1,63 @@
+use crate::models::{Tool, ToolContent, ToolResult};
+use async_trait::async_trait;
+use serde::Deserialize;
 use std::{fs, path::Path};
-use crate::models::{ToolResult, ToolContent};
+use utoipa::ToSchema;
 
-/// Write a file with the given contents
-pub async fn write_file(path: &str, contents: &str) -> ToolResult {
-    // Ensure the parent directory exists
-    if let Some(parent) = Path::new(path).parent() {
-        if let Err(e) = fs::create_dir_all(parent) {
-            return ToolResult {
-                is_error: true,
-                content: ToolContent::String(format!(
-                    "Failed to create directory '{}': {}",
-                    parent.display(),
-                    e
-                )),
-            };
-        }
+/// Input parameters for the write_file tool
+#[derive(Deserialize, ToSchema)]
+pub struct WriteFileInput {
+    /// The path of the file to write
+    pub path: String,
+    /// The contents to write to the file
+    pub contents: String,
+}
+
+/// Tool for writing content to files
+pub struct WriteFileTool;
+
+#[async_trait]
+impl Tool<'_, WriteFileInput> for WriteFileTool {
+    fn title(&self) -> &'static str {
+        "write_file"
     }
 
-    match fs::write(path, contents) {
-        Ok(_) => ToolResult {
-            is_error: false,
-            content: ToolContent::String(format!("Successfully wrote to file '{}'", path)),
-        },
-        Err(e) => ToolResult {
-            is_error: true,
-            content: ToolContent::String(format!("Failed to write to file '{}': {}", path, e)),
-        },
+    fn description(&self) -> &'static str {
+        "Writes content to a file at the specified path, creating the file and any parent directories \
+        if they don't exist. Use absolute paths when possible to avoid ambiguity. Be careful when using \
+        this tool as it will overwrite existing files without warning. Always verify the path is correct."
+    }
+
+    async fn run(&self, input: WriteFileInput) -> ToolResult {
+        // Ensure the parent directory exists
+        if let Some(parent) = Path::new(&input.path).parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                return ToolResult {
+                    is_error: true,
+                    content: ToolContent::String(format!(
+                        "Failed to create directory '{}': {}",
+                        parent.display(),
+                        e
+                    )),
+                };
+            }
+        }
+
+        match fs::write(&input.path, &input.contents) {
+            Ok(_) => ToolResult {
+                is_error: false,
+                content: ToolContent::String(format!(
+                    "Successfully wrote to file '{}'",
+                    input.path
+                )),
+            },
+            Err(e) => ToolResult {
+                is_error: true,
+                content: ToolContent::String(format!(
+                    "Failed to write to file '{}': {}",
+                    input.path, e
+                )),
+            },
+        }
     }
 }
