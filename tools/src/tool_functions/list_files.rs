@@ -1,4 +1,4 @@
-use crate::models::{Tool, ToolContent, ToolResult};
+use crate::models::{Tool, ToolContent, ToolName, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,8 @@ pub struct ListFilesTool;
 
 #[async_trait]
 impl Tool<ListFilesInput> for ListFilesTool {
-    fn title(&self) -> &'static str {
-        "list_files"
+    fn title(&self) -> ToolName {
+        ToolName::ListFiles
     }
 
     fn description(&self) -> &'static str {

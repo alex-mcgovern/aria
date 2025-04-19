@@ -1,4 +1,4 @@
-use crate::models::{Tool, ToolContent, ToolResult};
+use crate::models::{Tool, ToolContent, ToolName, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,8 +19,8 @@ pub struct RunCommandTool;
 
 #[async_trait]
 impl Tool<RunCommandInput> for RunCommandTool {
-    fn title(&self) -> &'static str {
-        "run_command"
+    fn title(&self) -> ToolName {
+        ToolName::RunCommand
     }
 
     fn description(&self) -> &'static str {

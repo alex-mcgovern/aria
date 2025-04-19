@@ -1,4 +1,4 @@
-use crate::models::{Tool, ToolContent, ToolResult};
+use crate::models::{Tool, ToolContent, ToolName, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,8 @@ pub struct TreeTool;
 
 #[async_trait]
 impl Tool<TreeInput> for TreeTool {
-    fn title(&self) -> &'static str {
-        "tree"
+    fn title(&self) -> ToolName {
+        ToolName::Tree
     }
 
     fn description(&self) -> &'static str {

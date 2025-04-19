@@ -1,11 +1,12 @@
 use async_trait::async_trait;
 use schemars::{schema_for, JsonSchema};
-use serde::de::Error as SerdeError; // Add this import to use the custom() method
+use serde::{de::Error as SerdeError, Deserialize, Serialize}; // Add this import to use the custom() method
 
 #[derive(Debug)]
 pub enum ToolError {
     InputSchemaSerializationError(serde_json::Error),
     JsonSchemaSerializationError(serde_json::Error),
+    InvalidToolName(String),
 }
 
 impl std::fmt::Display for ToolError {
@@ -17,11 +18,52 @@ impl std::fmt::Display for ToolError {
             Self::JsonSchemaSerializationError(e) => {
                 write!(f, "JSON schema serialization error: {}", e)
             }
+            Self::InvalidToolName(name) => {
+                write!(f, "Invalid tool name: {}", name)
+            }
         }
     }
 }
 
 impl std::error::Error for ToolError {}
+
+/// Enum representing all available tool names
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum ToolName {
+    ReadFile,
+    WriteFile,
+    ListFiles,
+    Tree,
+    RunCommand,
+}
+
+impl ToolName {
+    /// Convert the enum variant to its string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ReadFile => "read_file",
+            Self::WriteFile => "write_file",
+            Self::ListFiles => "list_files",
+            Self::Tree => "tree",
+            Self::RunCommand => "run_command",
+        }
+    }
+}
+
+impl TryFrom<String> for ToolName {
+    type Error = ToolError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        match value.as_str() {
+            "read_file" => Ok(Self::ReadFile),
+            "write_file" => Ok(Self::WriteFile),
+            "list_files" => Ok(Self::ListFiles),
+            "tree" => Ok(Self::Tree),
+            "run_command" => Ok(Self::RunCommand),
+            _ => Err(ToolError::InvalidToolName(value)),
+        }
+    }
+}
 
 /// A struct to represent the result of tool operations
 #[derive(Debug)]
@@ -44,7 +86,7 @@ pub trait Tool<T: JsonSchema> {
     async fn run(&self, input: T) -> ToolResult;
 
     /// Returns the title/name of the tool
-    fn title(&self) -> &'static str;
+    fn title(&self) -> ToolName;
 
     /// Returns a description of the tool's usage, best practices, and limitations
     fn description(&self) -> &'static str;
@@ -79,7 +121,7 @@ pub trait Tool<T: JsonSchema> {
     /// Returns a JSON representation of the tool's metadata and schema
     fn to_json_schema(&self) -> Result<String, ToolError> {
         serde_json::to_string(&serde_json::json!({
-            "name": self.title(),
+            "name": self.title().as_str(),
             "description": self.description(),
             "input_schema": serde_json::from_str::<serde_json::Value>(&self.input_schema()?).unwrap()
         }))

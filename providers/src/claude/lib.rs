@@ -1,4 +1,4 @@
-use crate::models::{Provider, ProviderResponse, StopReason};
+use crate::models::{Provider, ProviderResponse, ResponseContent, StopReason};
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use tools::ToolType;
@@ -63,8 +63,6 @@ impl Provider for ClaudeProvider {
             tools,
         };
 
-        println!("Request: {}", request);
-
         let response = self
             .client
             .post("http://127.0.0.1:8080/v1/messages")
@@ -74,31 +72,54 @@ impl Provider for ClaudeProvider {
             .await
             .context("Failed to send request to Claude API")?;
 
-        // Print status code and headers
-        println!("Response Status: {}", response.status());
-        println!("Response Headers: {:#?}", response.headers());
-
         let response_json: serde_json::Value = response
             .json()
             .await
             .context("Failed to parse Claude API response")?;
 
-        println!("Response json: {:#?}", response_json);
+        // Extract content based on type
+        let content_array = response_json["content"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Content is not an array in Claude response"))?;
 
-        // Extract content text
-        let content = &response_json["content"];
-        let mut content_text = String::new();
-        if let Some(content) = content.as_array() {
-            if let Some(first_content) = content.first() {
-                if let Some(text) = first_content["text"].as_str() {
-                    content_text = text.to_string();
+        if content_array.is_empty() {
+            return Err(anyhow::anyhow!("Empty content array in Claude response"));
+        }
+
+        let first_content = &content_array[0];
+        let content_type = first_content["type"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing type in content"))?;
+
+        let response_content = match content_type {
+            "text" => {
+                let text = first_content["text"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing text in text content"))?
+                    .to_string();
+                ResponseContent::Text { text }
+            }
+            "tool_use" => {
+                let id = first_content["id"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing id in tool_use content"))?
+                    .to_string();
+
+                let name = first_content["name"]
+                    .as_str()
+                    .ok_or_else(|| anyhow::anyhow!("Missing name in tool_use content"))?
+                    .to_string();
+
+                let input = first_content["input"].clone();
+
+                ResponseContent::ToolUse {
+                    id,
+                    name: name.try_into()?,
+                    input,
                 }
             }
-        }
-
-        if content_text.is_empty() {
-            return Err(anyhow::anyhow!("Failed to get text from Claude response"));
-        }
+            other => return Err(anyhow::anyhow!("Unknown content type: {}", other)),
+        };
 
         // Extract stop reason
         let stop_reason = match response_json["stop_reason"].as_str() {
@@ -113,7 +134,7 @@ impl Provider for ClaudeProvider {
         println!("Stop reason: {:?}", stop_reason);
 
         Ok(ProviderResponse {
-            content: content_text,
+            content: response_content,
             stop_reason,
         })
     }

@@ -1,4 +1,4 @@
-use crate::models::{Tool, ToolContent, ToolResult};
+use crate::models::{Tool, ToolContent, ToolName, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -19,8 +19,8 @@ pub struct WriteFileTool;
 
 #[async_trait]
 impl Tool<WriteFileInput> for WriteFileTool {
-    fn title(&self) -> &'static str {
-        "write_file"
+    fn title(&self) -> ToolName {
+        ToolName::WriteFile
     }
 
     fn description(&self) -> &'static str {

@@ -1,4 +1,4 @@
-use crate::models::{Tool, ToolContent, ToolResult};
+use crate::models::{Tool, ToolContent, ToolName, ToolResult};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,8 @@ pub struct ReadFileTool;
 
 #[async_trait]
 impl Tool<ReadFileInput> for ReadFileTool {
-    fn title(&self) -> &'static str {
-        "read_file"
+    fn title(&self) -> ToolName {
+        ToolName::ReadFile
     }
 
     fn description(&self) -> &'static str {
