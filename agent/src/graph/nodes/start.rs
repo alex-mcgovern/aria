@@ -1,6 +1,5 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
-use providers::Provider;
-use providers::Role;
+use providers::{models::MessageContent, Provider, Role};
 
 /// The starting node
 #[derive(Debug)]
@@ -15,7 +14,7 @@ impl<P: Provider> NodeRunner<P> for Start {
         // Setup initial state with user input
         state.messages.push(providers::Message {
             role: Role::User,
-            content: state.current_user_prompt.clone(),
+            content: MessageContent::Text(state.current_user_prompt.clone()),
         });
         Ok(NodeTransition::ToUserRequest)
     }

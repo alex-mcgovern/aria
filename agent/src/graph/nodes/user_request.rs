@@ -1,6 +1,6 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
 use anyhow::Context;
-use providers::{Message, Provider, ResponseContent, Role, StopReason};
+use providers::{models::MessageContent, Message, Provider, ResponseContent, Role, StopReason};
 
 /// The user request node
 #[derive(Debug)]
@@ -19,23 +19,27 @@ impl<P: Provider> NodeRunner<P> for UserRequest {
             .await
             .context("Failed to send prompt to provider")?;
 
-        // Extract content based on the type and add the response to messages
-        let content_str = match &response.content {
-            ResponseContent::Text { text } => text.clone(),
+        // Create appropriate message content based on the response type
+        let message_content = match &response.content {
+            ResponseContent::Text { text } => {
+                // For text responses, use simple text content
+                MessageContent::Text(text.clone())
+            }
             ResponseContent::ToolUse { id, name, input } => {
-                // For tool use, create a formatted string representation
-                format!(
+                // For tool use, create a formatted string representation as text
+                // In a more advanced implementation, this could be structured differently
+                MessageContent::Text(format!(
                     "Tool Use: {} (id: {}), Input: {}",
                     name.as_str(),
                     id,
                     serde_json::to_string_pretty(input).unwrap_or_default()
-                )
+                ))
             }
         };
 
         state.messages.push(Message {
             role: Role::Assistant,
-            content: content_str,
+            content: message_content,
         });
 
         // Route based on stop reason

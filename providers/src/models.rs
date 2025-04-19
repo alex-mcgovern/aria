@@ -11,17 +11,32 @@ pub enum Role {
     Assistant,
 }
 
-/// Represents the reason why the LLM stopped generating text
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StopReason {
-    #[serde(rename = "end_turn")]
-    EndTurn,
-    #[serde(rename = "max_tokens")]
-    MaxTokens,
-    #[serde(rename = "stop_sequence")]
-    StopSequence,
-    #[serde(rename = "tool_use")]
-    ToolUse,
+/// Represents different types of content items in a message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ContentBlock {
+    /// The result of a tool execution
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+    },
+}
+
+/// Represents the content of a message, which can either be plain text or a tool result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MessageContent {
+    /// Plain text content
+    Text(String),
+    /// A list of contents (currently only supporting tool results)
+    ContentList(Vec<ContentBlock>),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Message {
+    pub role: Role,
+    pub content: MessageContent,
 }
 
 #[derive(Debug, Serialize)]
@@ -37,10 +52,17 @@ pub struct Request {
     pub tools: Option<Vec<ToolType>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Message {
-    pub role: Role,
-    pub content: String,
+/// Represents the reason why the LLM stopped generating text
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StopReason {
+    #[serde(rename = "end_turn")]
+    EndTurn,
+    #[serde(rename = "max_tokens")]
+    MaxTokens,
+    #[serde(rename = "stop_sequence")]
+    StopSequence,
+    #[serde(rename = "tool_use")]
+    ToolUse,
 }
 
 /// Represents the different types of content that can be returned by the model
@@ -60,7 +82,7 @@ pub enum ResponseContent {
 
 /// A generic response structure for LLM providers
 #[derive(Debug, Clone)]
-pub struct ProviderResponse {
+pub struct Response {
     pub content: ResponseContent,
     pub stop_reason: Option<StopReason>,
 }
@@ -77,5 +99,5 @@ pub trait Provider {
         &self,
         prompt: &str,
         tools: Option<Vec<ToolType>>,
-    ) -> impl std::future::Future<Output = Result<ProviderResponse>> + Send;
+    ) -> impl std::future::Future<Output = Result<Response>> + Send;
 }

@@ -1,15 +1,18 @@
-use crate::models::{Provider, ProviderResponse, ResponseContent, StopReason};
+use crate::{
+    claude::models::AnthropicRole,
+    models::{Provider, Response, ResponseContent, StopReason},
+};
 use anyhow::{Context, Result};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use tools::ToolType;
 
-use super::models::{ClaudeModel, ClaudeRequest, Message};
+use super::models::{AnthropicMessage, AnthropicMessageContent, AnthropicModel, AnthropicRequest};
 
 #[derive(Clone)]
 pub struct ClaudeProvider {
     api_key: String,
     client: reqwest::Client,
-    model: ClaudeModel,
+    model: AnthropicModel,
 }
 
 impl Provider for ClaudeProvider {
@@ -21,46 +24,42 @@ impl Provider for ClaudeProvider {
         })
     }
 
-    async fn send_prompt(
-        &self,
-        prompt: &str,
-        tools: Option<Vec<ToolType>>,
-    ) -> Result<ProviderResponse> {
+    async fn send_prompt(&self, prompt: &str, tools: Option<Vec<ToolType>>) -> Result<Response> {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
         headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
 
-        let messages = vec![Message {
-            role: "user".to_string(),
-            content: prompt.to_string(),
+        let messages = vec![AnthropicMessage {
+            role: AnthropicRole::User,
+            content: AnthropicMessageContent::Text(prompt.to_string()),
         }];
 
-        // Convert tools to array of JSON schemas
-        let tools = tools
-            .map(|tools| {
-                tools
-                    .into_iter()
-                    .map(|tool| {
-                        tool.to_json_schema()
-                            .map_err(anyhow::Error::from)
-                            .and_then(|schema| {
-                                serde_json::from_str(&schema).context("Failed to parse JSON schema")
-                            })
-                    })
-                    .collect::<Result<Vec<serde_json::Value>>>()
-            })
-            .transpose()?;
+        // // Convert tools to array of JSON schemas
+        // let tools = tools
+        //     .map(|tools| {
+        //         tools
+        //             .into_iter()
+        //             .map(|tool| {
+        //                 tool.to_json_schema()
+        //                     .map_err(anyhow::Error::from)
+        //                     .and_then(|schema| {
+        //                         serde_json::from_str(&schema).context("Failed to parse JSON schema")
+        //                     })
+        //             })
+        //             .collect::<Result<Vec<serde_json::Value>>>()
+        //     })
+        //     .transpose()?;
 
         // Create Claude request directly to avoid conversion issues
-        let model = ClaudeModel::try_from(self.model.clone())?;
-        let request = ClaudeRequest {
+        // let model = AnthropicModel::try_from(self.model.clone())?;
+        let request = AnthropicRequest {
             system_prompt: String::new(),
             temperature: None,
-            model,
+            model: self.model.clone(),
             max_tokens: 1024,
             messages,
-            tools,
+            tools: None,
         };
 
         let response = self
@@ -91,7 +90,7 @@ impl Provider for ClaudeProvider {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing type in content"))?;
 
-        let response_content = match content_type {
+        let response_content: ResponseContent = match content_type {
             "text" => {
                 let text = first_content["text"]
                     .as_str()
@@ -104,14 +103,11 @@ impl Provider for ClaudeProvider {
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing id in tool_use content"))?
                     .to_string();
-
                 let name = first_content["name"]
                     .as_str()
                     .ok_or_else(|| anyhow::anyhow!("Missing name in tool_use content"))?
                     .to_string();
-
                 let input = first_content["input"].clone();
-
                 ResponseContent::ToolUse {
                     id,
                     name: name.try_into()?,
@@ -133,7 +129,7 @@ impl Provider for ClaudeProvider {
 
         println!("Stop reason: {:?}", stop_reason);
 
-        Ok(ProviderResponse {
+        Ok(Response {
             content: response_content,
             stop_reason,
         })

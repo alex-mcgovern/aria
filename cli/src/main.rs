@@ -1,8 +1,8 @@
 use agent::{Agent, CurrentNode};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use providers::claude::ClaudeProvider;
-use providers::Provider;
+use providers::{claude::ClaudeProvider, Role};
+use providers::{models::MessageContent, Provider};
 use std::io::{self, Write};
 
 // Constants for the process_input_with_graph parameters
@@ -102,10 +102,14 @@ where
 
                 // Special handling for UserRequest node
                 if matches!(node, CurrentNode::UserRequest) {
-                    // Get the last message from the state which will be the response
                     if let Some(last_message) = graph_iter.state().messages.last() {
-                        if last_message.role == providers::Role::Assistant {
-                            println!("Response received: {}", last_message.content);
+                        if last_message.role == Role::Assistant {
+                            match &last_message.content {
+                                MessageContent::Text(text) => {
+                                    println!("Response received: {}", text);
+                                }
+                                _ => (),
+                            }
                         }
                     }
                 }

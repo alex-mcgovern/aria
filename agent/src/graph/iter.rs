@@ -1,6 +1,6 @@
 use crate::graph::models::{CurrentNode, Deps, GraphError, NodeRunner, NodeTransition, State};
 use crate::graph::nodes::{CallTools, End, Start, UserRequest};
-use providers::{Provider, Role};
+use providers::{models::MessageContent, Provider, Role};
 
 /// A struct to hold the state of a graph iteration
 pub struct GraphIter<P: Provider> {
@@ -98,7 +98,12 @@ impl<P: Provider> GraphIter<P> {
                 // Store the result if we've reached the end
                 if let Some(last_message) = self.state.messages.last() {
                     if last_message.role == Role::Assistant {
-                        self.result = Some(last_message.content.clone());
+                        match &last_message.content {
+                            MessageContent::Text(text) => {
+                                self.result = Some(text.clone());
+                            }
+                            _ => self.result = None,
+                        }
                     }
                 }
 

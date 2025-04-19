@@ -1,77 +1,153 @@
-use crate::models::{Request as GenericRequest, Role};
+use crate::{
+    models::{ContentBlock, MessageContent, Request as GenericRequest, Role},
+    Message, Response, ResponseContent, StopReason,
+};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tools::ToolType;
+use tools::models::ToolName;
 
-#[derive(Debug, Clone)]
-pub enum ClaudeModel {
-    Claude3Sonnet,
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum AnthropicModel {
+    Claude37Sonnet,
 }
 
-impl ToString for ClaudeModel {
+impl ToString for AnthropicModel {
     fn to_string(&self) -> String {
         match self {
-            ClaudeModel::Claude3Sonnet => "claude-3-7-sonnet-20250219".to_string(),
+            AnthropicModel::Claude37Sonnet => "claude-3-7-sonnet-20250219".to_string(),
         }
     }
 }
 
-impl TryFrom<String> for ClaudeModel {
+impl TryFrom<String> for AnthropicModel {
     type Error = anyhow::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         match value.as_str() {
-            "claude-3-7-sonnet-20250219" => Ok(ClaudeModel::Claude3Sonnet),
+            "claude-3-7-sonnet-20250219" => Ok(AnthropicModel::Claude37Sonnet),
             _ => Err(anyhow::anyhow!("Unknown Claude model: {}", value)),
         }
     }
 }
 
+/// Represents the role of the message sender
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AnthropicRole {
+    #[serde(rename = "user")]
+    User,
+    #[serde(rename = "assistant")]
+    Assistant,
+}
+
+impl TryFrom<Role> for AnthropicRole {
+    type Error = anyhow::Error;
+
+    fn try_from(role: Role) -> Result<Self, Self::Error> {
+        match role {
+            Role::User => Ok(AnthropicRole::User),
+            Role::Assistant => Ok(AnthropicRole::Assistant),
+        }
+    }
+}
+
+/// Represents different types of content items in a message
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicContentBlock {
+    /// The result of a tool execution
+    #[serde(rename = "tool_result")]
+    ToolResult {
+        tool_use_id: String,
+        content: String,
+    },
+}
+
+impl TryFrom<ContentBlock> for AnthropicContentBlock {
+    type Error = anyhow::Error;
+
+    fn try_from(block: ContentBlock) -> Result<Self, Self::Error> {
+        match block {
+            ContentBlock::ToolResult {
+                tool_use_id,
+                content,
+            } => Ok(AnthropicContentBlock::ToolResult {
+                tool_use_id,
+                content,
+            }),
+        }
+    }
+}
+
+/// Represents the content of a message, which can either be plain text or a tool result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AnthropicMessageContent {
+    /// Plain text content
+    Text(String),
+    /// A list of contents (currently only supporting tool results)
+    ContentList(Vec<AnthropicContentBlock>),
+}
+
+impl TryFrom<MessageContent> for AnthropicMessageContent {
+    type Error = anyhow::Error;
+
+    fn try_from(content: MessageContent) -> Result<Self, Self::Error> {
+        match content {
+            MessageContent::Text(text) => Ok(AnthropicMessageContent::Text(text)),
+            MessageContent::ContentList(items) => {
+                let converted: Result<Vec<_>, _> = items
+                    .into_iter()
+                    .map(AnthropicContentBlock::try_from)
+                    .collect();
+                Ok(AnthropicMessageContent::ContentList(converted?))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AnthropicMessage {
+    pub role: AnthropicRole,
+    pub content: AnthropicMessageContent,
+}
+
+impl TryFrom<Message> for AnthropicMessage {
+    type Error = anyhow::Error;
+
+    fn try_from(message: Message) -> Result<Self, Self::Error> {
+        Ok(AnthropicMessage {
+            role: message.role.try_into()?,
+            content: message.content.try_into()?,
+        })
+    }
+}
+
 #[derive(Debug, Serialize)]
-pub struct ClaudeRequest {
+pub struct AnthropicRequest {
     #[serde(skip_serializing_if = "String::is_empty")]
     pub system_prompt: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f64>,
-    #[serde(serialize_with = "serialize_claude_model")]
-    pub model: ClaudeModel,
+    pub model: AnthropicModel,
     pub max_tokens: u32,
-    pub messages: Vec<Message>,
+    pub messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Value>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Message {
-    pub role: String,
-    pub content: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Content {
-    pub text: String,
-    #[serde(rename = "type")]
-    pub content_type: String,
-}
-
-impl TryFrom<GenericRequest> for ClaudeRequest {
+impl TryFrom<GenericRequest> for AnthropicRequest {
     type Error = anyhow::Error;
 
-    fn try_from(req: GenericRequest) -> Result<Self, Self::Error> {
-        let messages = req
+    fn try_from(request: GenericRequest) -> Result<Self, Self::Error> {
+        let messages: Result<Vec<_>, _> = request
             .messages
             .into_iter()
-            .map(|m| Message {
-                role: match m.role {
-                    Role::User => "user".to_string(),
-                    Role::Assistant => "assistant".to_string(),
-                },
-                content: m.content,
-            })
+            .map(AnthropicMessage::try_from)
             .collect();
 
-        let tools = req
+        // Convert tools to array of JSON schemas
+        let tools = request
             .tools
             .map(|tools| {
                 tools
@@ -87,25 +163,93 @@ impl TryFrom<GenericRequest> for ClaudeRequest {
             })
             .transpose()?;
 
-        Ok(ClaudeRequest {
-            system_prompt: req.system_prompt,
-            temperature: req.temperature,
-            model: req.model.try_into()?,
-            max_tokens: req.max_tokens,
-            messages,
+        Ok(AnthropicRequest {
+            system_prompt: request.system_prompt,
+            temperature: request.temperature,
+            model: request
+                .model
+                .try_into()
+                .context("Failed to convert model string to AnthropicModel")?,
+            max_tokens: request.max_tokens,
+            messages: messages?,
             tools,
         })
     }
 }
 
-fn serialize_claude_model<S>(model: &ClaudeModel, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.serialize_str(&model.to_string())
+/// Represents the reason why the LLM stopped generating text
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AnthropicStopReason {
+    #[serde(rename = "end_turn")]
+    EndTurn,
+    #[serde(rename = "max_tokens")]
+    MaxTokens,
+    #[serde(rename = "stop_sequence")]
+    StopSequence,
+    #[serde(rename = "tool_use")]
+    ToolUse,
 }
 
-impl std::fmt::Display for ClaudeRequest {
+impl TryFrom<StopReason> for AnthropicStopReason {
+    type Error = anyhow::Error;
+
+    fn try_from(reason: StopReason) -> Result<Self, Self::Error> {
+        match reason {
+            StopReason::EndTurn => Ok(AnthropicStopReason::EndTurn),
+            StopReason::MaxTokens => Ok(AnthropicStopReason::MaxTokens),
+            StopReason::StopSequence => Ok(AnthropicStopReason::StopSequence),
+            StopReason::ToolUse => Ok(AnthropicStopReason::ToolUse),
+        }
+    }
+}
+
+/// Represents the different types of content that can be returned by the model
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicResponseContent {
+    #[serde(rename = "text")]
+    Text { text: String },
+
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: ToolName,
+        input: serde_json::Value,
+    },
+}
+
+impl TryFrom<ResponseContent> for AnthropicResponseContent {
+    type Error = anyhow::Error;
+
+    fn try_from(content: ResponseContent) -> Result<Self, Self::Error> {
+        match content {
+            ResponseContent::Text { text } => Ok(AnthropicResponseContent::Text { text }),
+            ResponseContent::ToolUse { id, name, input } => {
+                Ok(AnthropicResponseContent::ToolUse { id, name, input })
+            }
+        }
+    }
+}
+
+/// A generic response structure for LLM providers
+#[derive(Debug, Clone)]
+pub struct AnthropicResponse {
+    pub content: AnthropicResponseContent,
+    pub stop_reason: Option<AnthropicStopReason>,
+}
+
+impl TryFrom<Response> for AnthropicResponse {
+    type Error = anyhow::Error;
+
+    fn try_from(response: Response) -> Result<Self, Self::Error> {
+        Ok(AnthropicResponse {
+            content: response.content.try_into()?,
+            stop_reason: response.stop_reason.map(|r| r.try_into()).transpose()?,
+        })
+    }
+}
+
+impl std::fmt::Display for AnthropicRequest {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
