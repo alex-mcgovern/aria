@@ -85,19 +85,10 @@ async fn main() -> Result<()> {
 
 // Create a provider from config without relying on TryFrom implementation
 fn create_provider_from_config(config: &Config) -> Result<Provider> {
-    // Get API key from config or environment
-    let api_key = config
-        .api_key
-        .clone()
-        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-        .ok_or_else(|| {
-            anyhow::anyhow!("API key not found in config or ANTHROPIC_API_KEY environment variable")
-        })?;
-
     // Create provider based on config type
     match &config.provider {
         ProviderType::Anthropic => Provider::new_anthropic(
-            api_key,
+            config.api_key.clone(),
             config.model.clone(),
             config.provider_base_url.clone(),
         ),

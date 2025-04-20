@@ -168,7 +168,13 @@ pub enum Provider {
 
 impl Provider {
     /// Create a new provider instance for Anthropic
-    pub fn new_anthropic(api_key: String, model: String, base_url: Option<String>) -> Result<Self> {
+    pub fn new_anthropic(
+        api_key: Option<String>,
+        model: String,
+        base_url: Option<String>,
+    ) -> Result<Self> {
+        let api_key =
+            api_key.ok_or_else(|| anyhow::anyhow!("API key is required for Anthropic provider"))?;
         let provider = crate::anthropic::AnthropicProvider::new(api_key, model, base_url)?;
         Ok(Provider::Anthropic(provider))
     }
@@ -191,7 +197,7 @@ impl BaseProvider for Provider {
         Self: Sized,
     {
         // Default to Anthropic provider
-        Provider::new_anthropic(api_key, model, base_url)
+        Provider::new_anthropic(Some(api_key), model, base_url)
     }
 
     async fn sync(
