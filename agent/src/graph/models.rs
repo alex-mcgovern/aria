@@ -1,4 +1,4 @@
-use providers::{Message, ProviderBase};
+use providers::{Message, BaseProvider};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use tools::ToolType;
@@ -42,7 +42,7 @@ pub struct State {
 }
 
 /// Dependencies that nodes need to function
-pub struct Deps<P: ProviderBase> {
+pub struct Deps<P: BaseProvider> {
     pub provider: P,
     pub tools: Option<Vec<ToolType>>,
     pub system_prompt: String,
@@ -52,7 +52,7 @@ pub struct Deps<P: ProviderBase> {
 
 /// A trait for running node logic without the associated type
 /// This allows us to use dynamic dispatch with trait objects
-pub trait NodeRunner<P: ProviderBase>: Debug {
+pub trait NodeRunner<P: BaseProvider>: Debug {
     /// Run the node's logic
     async fn run(
         &self,

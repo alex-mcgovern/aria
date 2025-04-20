@@ -1,6 +1,6 @@
 use crate::{
     anthropic::models::AnthropicResponse,
-    models::{Provider, Response},
+    models::{BaseProvider, Response},
     Message,
 };
 use anyhow::{Context, Result};
@@ -14,14 +14,16 @@ pub struct AnthropicProvider {
     api_key: String,
     client: reqwest::Client,
     model: AnthropicModel,
+    base_url: String,
 }
 
-impl Provider for AnthropicProvider {
-    fn new(api_key: String, model: String) -> Result<Self> {
+impl BaseProvider for AnthropicProvider {
+    fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self> {
         Ok(AnthropicProvider {
             api_key,
             client: reqwest::Client::new(),
             model: model.try_into()?,
+            base_url: base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string()),
         })
     }
 
@@ -64,9 +66,11 @@ impl Provider for AnthropicProvider {
             tools,
         };
 
+        let endpoint = format!("{}/v1/messages", self.base_url);
+
         let response = self
             .client
-            .post("http://127.0.0.1:8080/v1/messages")
+            .post(&endpoint)
             .headers(headers)
             .json(&request)
             .send()
@@ -80,7 +84,6 @@ impl Provider for AnthropicProvider {
 
         // Convert the AnthropicResponse to our generic Response type
         let response: Response = anthropic_response.try_into()?;
-
         Ok(response)
     }
 }

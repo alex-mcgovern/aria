@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {
     pub provider: ProviderType,
-    pub provider_base_url: String,
+    pub provider_base_url: Option<String>,
     pub api_key: Option<String>,
     pub model: String,
     #[serde(default = "default_response_max_tokens")]

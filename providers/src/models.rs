@@ -18,8 +18,6 @@ impl fmt::Display for ProviderType {
     }
 }
 
-
-
 /// Represents the role of the message sender
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Role {
@@ -169,9 +167,9 @@ pub struct Response {
 }
 
 /// A trait for LLM providers
-pub trait ProviderBase {
+pub trait BaseProvider {
     /// Initialize the provider with API keys and other configuration
-    fn new(api_key: String, model: String) -> Result<Self>
+    fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self>
     where
         Self: Sized;
 

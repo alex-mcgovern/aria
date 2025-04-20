@@ -2,7 +2,7 @@ use agent::{Agent, CurrentNode};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use config::{load_config_file, Config};
-use providers::ProviderBase;
+use providers::BaseProvider;
 use providers::{anthropic::AnthropicProvider, models::ContentBlock, Role};
 use std::io::{self, Write};
 
@@ -61,10 +61,10 @@ async fn main() -> Result<()> {
 
     // Create provider based on config
     let provider = match config.provider {
-        providers::models::ProviderType::Anthropic => AnthropicProvider::with_base_url(
+        providers::models::ProviderType::Anthropic => AnthropicProvider::new(
             api_key,
             config.model.clone(),
-            &config.provider_base_url,
+            config.provider_base_url.clone(),
         )?,
     };
 
@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn execute_with_graph_iter<P: ProviderBase>(
+async fn execute_with_graph_iter<P: BaseProvider>(
     agent: &Agent<P>,
     input: &str,
     config: &Config,
@@ -150,7 +150,7 @@ where
     Ok(())
 }
 
-async fn interactive_loop<P: ProviderBase>(agent: &Agent<P>, config: &Config) -> Result<()>
+async fn interactive_loop<P: BaseProvider>(agent: &Agent<P>, config: &Config) -> Result<()>
 where
     P: Clone,
 {
