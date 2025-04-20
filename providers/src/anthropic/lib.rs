@@ -1,15 +1,15 @@
 use crate::{
-    anthropic::models::AnthropicStreamEvent,
     models::{BaseProvider, StreamEvent},
     Message,
 };
 use anyhow::{Context, Result};
+use async_stream::try_stream;
 use futures_util::stream::{Stream, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest_eventsource::{Event, EventSource};
+use reqwest_eventsource::EventSource;
 use tools::ToolType;
 
-use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest};
+use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -73,28 +73,48 @@ impl BaseProvider for AnthropicProvider {
             reqwest::Client::new()
                 .post(&endpoint)
                 .headers(headers)
-                .json(&request), // .build()?,
+                .json(&request),
         )?;
 
-        // Process the SSE event stream
-        let event_stream = event_source.map(|event_result| {
-            event_result
-                .context("Error in event stream")
-                .and_then(|event| match event {
-                    Event::Open => Ok(StreamEvent::Ping), // Just return a Ping event for Open events
-                    Event::Message(message) => {
+        Ok(try_stream! {
+            let mut event_source = event_source;
+
+            while let Some(event_result) = event_source.next().await {
+                match event_result {
+                    Ok(reqwest_eventsource::Event::Open) => {
+                        yield StreamEvent::Ping;
+                    },
+                    Ok(reqwest_eventsource::Event::Message(message)) => {
                         // Parse the event data as an AnthropicStreamEvent
                         let anthropic_event: AnthropicStreamEvent =
                             serde_json::from_str(&message.data)
                                 .context("Failed to parse Anthropic stream event")?;
 
-                        // Convert to the generic StreamEvent type
-                        let generic_event: StreamEvent = anthropic_event.try_into()?;
-                        Ok(generic_event)
+                        // Check if this is a message_stop event
+                        if matches!(anthropic_event, AnthropicStreamEvent::MessageStop) {
+                            // Convert to the generic StreamEvent::MessageStop type
+                            yield StreamEvent::MessageStop;
+                            // Since we received a MessageStop event, we can safely close the event source
+                            break;
+                        } else {
+                            // Convert to the generic StreamEvent type
+                            let generic_event: StreamEvent = anthropic_event.try_into()?;
+                            yield generic_event;
+                        }
+                    },
+                    Err(err) => {
+                        // If we get a stream closed error, just break the loop gracefully
+                        if err.to_string().contains("Stream closed") || err.to_string().contains("Stream ended") {
+                            break;
+                        }
+                        // Otherwise propagate the error
+                        Err(err)?
                     }
-                })
-        });
+                }
+            }
 
-        Ok(event_stream)
+            // Close the event source when we're done
+            event_source.close();
+        })
     }
 }

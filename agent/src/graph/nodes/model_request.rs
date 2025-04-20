@@ -31,7 +31,9 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
             let mut stream = Box::pin(stream);
 
             while let Some(event_result) = stream.next().await {
-                let event = event_result.context("Error in event stream")?;
+                println!("[graph] Stream event: {:?}", event_result);
+                let event = event_result.context("[graph] Error in event stream")?;
+                println!("[graph] Stream event: {:?}", event);
                 events.push(event);
             }
 
