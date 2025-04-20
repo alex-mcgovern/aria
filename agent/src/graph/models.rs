@@ -1,4 +1,4 @@
-use providers::{Message, BaseProvider};
+use providers::{BaseProvider, Message};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
 use tools::ToolType;

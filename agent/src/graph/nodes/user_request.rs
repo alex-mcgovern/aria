@@ -1,5 +1,5 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
-use providers::{models::ContentBlock, Message, BaseProvider, Role};
+use providers::{models::ContentBlock, BaseProvider, Message, Role};
 
 /// The user request node
 #[derive(Debug)]
@@ -9,7 +9,7 @@ impl<P: BaseProvider> NodeRunner<P> for UserRequest {
     async fn run(
         &self,
         state: &mut State,
-        deps: &Deps<P>,
+        _deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
         // Add the user's message to the message history
         state.message_history.push(Message {

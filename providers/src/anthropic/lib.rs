@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use async_stream::try_stream;
 use futures_util::stream::{Stream, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
-use reqwest_eventsource::EventSource;
+use reqwest_eventsource::{Error as EventSourceError, EventSource};
 use tools::ToolType;
 
 use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
@@ -81,35 +81,22 @@ impl BaseProvider for AnthropicProvider {
 
             while let Some(event_result) = event_source.next().await {
                 match event_result {
+                    // The `open` event can just be mapped
+                    // to a ping (which is just a heartbeat)
                     Ok(reqwest_eventsource::Event::Open) => {
                         yield StreamEvent::Ping;
                     },
                     Ok(reqwest_eventsource::Event::Message(message)) => {
-                        // Parse the event data as an AnthropicStreamEvent
                         let anthropic_event: AnthropicStreamEvent =
                             serde_json::from_str(&message.data)
                                 .context("Failed to parse Anthropic stream event")?;
 
-                        // Check if this is a message_stop event
-                        if matches!(anthropic_event, AnthropicStreamEvent::MessageStop) {
-                            // Convert to the generic StreamEvent::MessageStop type
-                            yield StreamEvent::MessageStop;
-                            // Since we received a MessageStop event, we can safely close the event source
-                            break;
-                        } else {
-                            // Convert to the generic StreamEvent type
-                            let generic_event: StreamEvent = anthropic_event.try_into()?;
-                            yield generic_event;
-                        }
+                        yield anthropic_event.try_into()?;
                     },
-                    Err(err) => {
-                        // If we get a stream closed error, just break the loop gracefully
-                        if err.to_string().contains("Stream closed") || err.to_string().contains("Stream ended") {
-                            break;
-                        }
-                        // Otherwise propagate the error
-                        Err(err)?
-                    }
+                    // No idea why they decided to use an error
+                    // event for the end of the stream ¯\_(ツ)_/¯
+                    Err(EventSourceError::StreamEnded) => break,
+                    Err(err) => Err(err)?
                 }
             }
 

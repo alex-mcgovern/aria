@@ -17,9 +17,10 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
         state: &mut State,
         deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
-        // Process the stream and collect response in a separate scope to drop the immutable borrow
+        // Run the stream, process the events and collect them into a `Response`
+        // Note that `Response` can be tried into `Message` directly, so we just
+        // push this into the message history
         let response = {
-            // Get a stream from the provider
             let stream = deps
                 .provider
                 .stream(&state.message_history, deps.tools.clone())
@@ -31,9 +32,7 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
             let mut stream = Box::pin(stream);
 
             while let Some(event_result) = stream.next().await {
-                println!("[graph] Stream event: {:?}", event_result);
-                let event = event_result.context("[graph] Error in event stream")?;
-                println!("[graph] Stream event: {:?}", event);
+                let event = event_result.context("Error in event stream")?;
                 events.push(event);
             }
 
@@ -42,7 +41,6 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
                 .context("Failed to process stream events")?
         };
 
-        // Push message with content array containing the block
         state.message_history.push(
             response
                 .clone()
@@ -50,16 +48,10 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
                 .context("Failed to convert response to message")?,
         );
 
-        // Route based on stop reason
         match response.stop_reason {
-            Some(StopReason::MaxTokens) => {
-                return Err(GraphError::MaxTokens);
-            }
+            Some(StopReason::MaxTokens) => Err(GraphError::MaxTokens),
             Some(StopReason::ToolUse) => Ok(NodeTransition::ToCallTools),
-            _ => {
-                // EndTurn, StopSequence, or None
-                Ok(NodeTransition::ToEnd)
-            }
+            _ => Ok(NodeTransition::ToEnd),
         }
     }
 }
