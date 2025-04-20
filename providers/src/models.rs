@@ -1,7 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TryFromInto};
-use std::fmt;
 use tools::{models::ToolName, ToolType};
 
 /// Represents the role of the message sender
@@ -143,7 +142,8 @@ pub struct Response {
     pub content: Vec<ResponseContentBlock>,
     pub stop_reason: Option<StopReason>,
     pub stop_sequence: Option<String>,
-    pub usage: Usage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 /// Generic types for streaming events
@@ -234,9 +234,12 @@ pub struct MessageStartData {
 }
 
 /// A trait for implementing stream processing capability
-pub trait StreamProcessor {
+pub trait StreamProcessor<T>
+where
+    T: TryInto<StreamEvent>,
+{
     /// Process a vector of stream events into a Response
-    fn process_events(events: Vec<StreamEvent>) -> Result<Response>;
+    fn process_events(events: Vec<T>) -> Result<Response>;
 }
 
 /// A trait for LLM providers
@@ -245,13 +248,6 @@ pub trait BaseProvider {
     fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self>
     where
         Self: Sized;
-
-    /// Send a prompt to the provider and get a response
-    fn sync(
-        &self,
-        messages: &Vec<Message>,
-        tools: Option<Vec<ToolType>>,
-    ) -> impl std::future::Future<Output = Result<Response>> + Send;
 
     /// Stream a response from the provider
     fn stream(
@@ -282,17 +278,6 @@ impl Provider {
         Ok(Provider::Anthropic(provider))
     }
 
-    /// Send a prompt to the provider and get a response
-    pub async fn sync(
-        &self,
-        messages: &Vec<Message>,
-        tools: Option<Vec<ToolType>>,
-    ) -> Result<Response> {
-        match self {
-            Provider::Anthropic(provider) => provider.sync(messages, tools).await,
-        }
-    }
-
     /// Stream a response from the provider
     pub async fn stream<'a>(
         &'a self,
@@ -314,21 +299,14 @@ impl BaseProvider for Provider {
         Provider::new_anthropic(Some(api_key), model, base_url)
     }
 
-    async fn sync(
+    async fn stream(
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
-    ) -> Result<Response> {
+    ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send> {
+        // Call the Provider::stream method instead of recursively calling itself
         match self {
-            Provider::Anthropic(provider) => provider.sync(messages, tools).await,
+            Provider::Anthropic(provider) => provider.stream(messages, tools).await,
         }
-    }
-
-    async fn stream<'a>(
-        &'a self,
-        messages: &'a Vec<Message>,
-        tools: Option<Vec<ToolType>>,
-    ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send + 'a> {
-        self.stream(messages, tools).await
     }
 }

@@ -333,7 +333,9 @@ impl TryFrom<AnthropicResponseContentBlock> for ResponseContentBlock {
 /// Represents usage statistics for the API request
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicUsage {
+    #[serde(default)]
     pub input_tokens: u32,
+    #[serde(default)]
     pub output_tokens: u32,
     #[serde(default)]
     pub cache_creation_input_tokens: u32,
@@ -378,7 +380,8 @@ pub struct AnthropicResponse {
     pub content: Vec<AnthropicResponseContentBlock>,
     pub stop_reason: Option<AnthropicStopReason>,
     pub stop_sequence: Option<String>,
-    pub usage: AnthropicUsage,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<AnthropicUsage>,
 }
 
 impl TryFrom<AnthropicResponse> for Response {
@@ -399,7 +402,7 @@ impl TryFrom<AnthropicResponse> for Response {
             content: content,
             stop_reason: response.stop_reason.map(|r| r.try_into()).transpose()?,
             stop_sequence: response.stop_sequence,
-            usage: response.usage.try_into()?,
+            usage: response.usage.map(|u| u.try_into()).transpose()?,
         })
     }
 }
@@ -572,7 +575,7 @@ pub enum AnthropicStreamEvent {
     #[serde(rename = "message_delta")]
     MessageDelta {
         delta: AnthropicMessageDeltaData,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default)]
         usage: Option<AnthropicUsage>,
     },
     #[serde(rename = "message_stop")]
@@ -626,7 +629,7 @@ impl TryFrom<AnthropicStreamEvent> for StreamEvent {
 }
 
 // Implement TryFrom for collections of events
-impl StreamProcessor for AnthropicStreamEvent {
+impl StreamProcessor<AnthropicStreamEvent> for AnthropicStreamEvent {
     fn process_events(events: Vec<AnthropicStreamEvent>) -> Result<Response> {
         let mut id = String::new();
         let mut model = String::new();
@@ -749,13 +752,13 @@ impl StreamProcessor for AnthropicStreamEvent {
                 .collect::<Result<Vec<_>, _>>()?,
             stop_reason: stop_reason.map(TryInto::try_into).transpose()?,
             stop_sequence,
-            usage: usage.try_into()?,
+            usage: Some(usage.try_into()?),
         })
     }
 }
 
 // Add trait implementations for the generic StreamProcessor
-impl crate::models::StreamProcessor for StreamEvent {
+impl StreamProcessor<StreamEvent> for StreamEvent {
     fn process_events(events: Vec<StreamEvent>) -> Result<Response> {
         // Convert generic events to Anthropic events
         let anthropic_events: Result<Vec<AnthropicStreamEvent>> = events
