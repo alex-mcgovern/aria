@@ -1,22 +1,8 @@
-use std::fmt;
-
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TryFromInto};
+use std::fmt;
 use tools::{models::ToolName, ToolType};
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum ProviderType {
-    Anthropic,
-}
-
-impl fmt::Display for ProviderType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ProviderType::Anthropic => write!(f, "Anthropic"),
-        }
-    }
-}
 
 /// Represents the role of the message sender
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -38,11 +24,9 @@ pub enum ContentBlock {
         tool_use_id: String,
         content: String,
     },
-
     /// Plain text content
     #[serde(rename = "text")]
     Text { text: String },
-
     /// A request to use a tool
     #[serde(rename = "tool_use")]
     ToolUse {
@@ -55,7 +39,6 @@ pub enum ContentBlock {
 
 impl TryFrom<ResponseContentBlock> for ContentBlock {
     type Error = anyhow::Error;
-
     fn try_from(value: ResponseContentBlock) -> Result<Self, Self::Error> {
         match value {
             ResponseContentBlock::Text { text } => Ok(ContentBlock::Text { text }),
@@ -84,14 +67,12 @@ pub struct Message {
 
 impl TryFrom<Response> for Message {
     type Error = anyhow::Error;
-
     fn try_from(response: Response) -> Result<Self, Self::Error> {
         let content = response
             .content
             .into_iter()
             .map(ContentBlock::try_from)
             .collect::<Result<Vec<ContentBlock>>>()?;
-
         Ok(Message {
             role: Role::Assistant,
             content,
@@ -131,7 +112,6 @@ pub enum StopReason {
 pub enum ResponseContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
-
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
@@ -172,11 +152,55 @@ pub trait BaseProvider {
     fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self>
     where
         Self: Sized;
-
     /// Send a prompt to the provider and get a response
     fn sync(
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
     ) -> impl std::future::Future<Output = Result<Response>> + Send;
+}
+
+/// A provider factory that creates and manages specific LLM provider implementations
+#[derive(Clone)]
+pub enum Provider {
+    Anthropic(crate::anthropic::AnthropicProvider),
+}
+
+impl Provider {
+    /// Create a new provider instance for Anthropic
+    pub fn new_anthropic(api_key: String, model: String, base_url: Option<String>) -> Result<Self> {
+        let provider = crate::anthropic::AnthropicProvider::new(api_key, model, base_url)?;
+        Ok(Provider::Anthropic(provider))
+    }
+
+    /// Send a prompt to the provider and get a response
+    pub async fn sync(
+        &self,
+        messages: &Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> Result<Response> {
+        match self {
+            Provider::Anthropic(provider) => provider.sync(messages, tools).await,
+        }
+    }
+}
+
+impl BaseProvider for Provider {
+    fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        // Default to Anthropic provider
+        Provider::new_anthropic(api_key, model, base_url)
+    }
+
+    async fn sync(
+        &self,
+        messages: &Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> Result<Response> {
+        match self {
+            Provider::Anthropic(provider) => provider.sync(messages, tools).await,
+        }
+    }
 }

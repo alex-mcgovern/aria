@@ -1,9 +1,9 @@
 use agent::{Agent, CurrentNode};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use config::{load_config_file, Config};
-use providers::BaseProvider;
-use providers::{anthropic::AnthropicProvider, models::ContentBlock, Role};
+use config::{load_config_file, Config, ProviderType};
+use providers::{models::ContentBlock, Role};
+use providers::{BaseProvider, Provider};
 use std::io::{self, Write};
 
 // Constants for the process_input_with_graph parameters
@@ -52,21 +52,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Get API key from config or environment
-    let api_key = config
-        .api_key
-        .clone()
-        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
-        .context("API key not found in config or ANTHROPIC_API_KEY environment variable")?;
-
     // Create provider based on config
-    let provider = match config.provider {
-        providers::models::ProviderType::Anthropic => AnthropicProvider::new(
-            api_key,
-            config.model.clone(),
-            config.provider_base_url.clone(),
-        )?,
-    };
+    let provider = create_provider_from_config(&config)?;
 
     // Create agent
     let agent = Agent::new(provider);
@@ -94,6 +81,27 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+// Create a provider from config without relying on TryFrom implementation
+fn create_provider_from_config(config: &Config) -> Result<Provider> {
+    // Get API key from config or environment
+    let api_key = config
+        .api_key
+        .clone()
+        .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("API key not found in config or ANTHROPIC_API_KEY environment variable")
+        })?;
+
+    // Create provider based on config type
+    match &config.provider {
+        ProviderType::Anthropic => Provider::new_anthropic(
+            api_key,
+            config.model.clone(),
+            config.provider_base_url.clone(),
+        ),
+    }
 }
 
 async fn execute_with_graph_iter<P: BaseProvider>(

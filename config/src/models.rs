@@ -1,5 +1,18 @@
-use providers::models::ProviderType;
 use serde::{Deserialize, Serialize};
+use std::fmt;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ProviderType {
+    Anthropic,
+}
+
+impl fmt::Display for ProviderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProviderType::Anthropic => write!(f, "Anthropic"),
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Config {

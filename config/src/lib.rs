@@ -2,7 +2,7 @@ mod error;
 mod models;
 
 pub use error::ConfigError;
-pub use models::Config;
+pub use models::{Config, ProviderType};
 
 use std::env;
 use std::fs;
