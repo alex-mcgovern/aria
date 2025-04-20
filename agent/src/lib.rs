@@ -13,7 +13,6 @@ impl<P: BaseProvider> Agent<P> {
         Agent { provider }
     }
 
-    /// Process input using the graph-based state machine and return an iterator
     pub fn iter(
         &self,
         user_prompt: &str,
@@ -31,8 +30,7 @@ impl<P: BaseProvider> Agent<P> {
             ToolType::Tree(TreeTool),
             ToolType::WriteFile(WriteFileTool),
         ];
-        
-        // Create the dependencies for GraphIter
+
         let deps = Deps {
             provider: self.provider.clone(),
             tools: Some(tools),
@@ -40,8 +38,7 @@ impl<P: BaseProvider> Agent<P> {
             max_tokens,
             temperature,
         };
-        
-        // Create GraphIter (streaming is now the default behavior)
+
         GraphIter::new(deps, user_prompt.to_string())
     }
 }

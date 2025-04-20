@@ -118,7 +118,6 @@ where
         match node_result {
             Ok(node) => {
                 println!("Processing node: {:?}", node);
-                // Special handling for UserRequest node
                 if matches!(node, CurrentNode::UserRequest) {
                     if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
