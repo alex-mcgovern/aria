@@ -1,7 +1,24 @@
+use std::fmt;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TryFromInto};
 use tools::{models::ToolName, ToolType};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ProviderType {
+    Anthropic,
+}
+
+impl fmt::Display for ProviderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProviderType::Anthropic => write!(f, "Anthropic"),
+        }
+    }
+}
+
+
 
 /// Represents the role of the message sender
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -152,7 +169,7 @@ pub struct Response {
 }
 
 /// A trait for LLM providers
-pub trait Provider {
+pub trait ProviderBase {
     /// Initialize the provider with API keys and other configuration
     fn new(api_key: String, model: String) -> Result<Self>
     where

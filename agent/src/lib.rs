@@ -1,14 +1,14 @@
-use providers::Provider;
+use providers::ProviderBase;
 
 pub mod graph;
 pub use graph::{CurrentNode, Deps, GraphError, GraphIter, NodeRunner, NodeTransition, State};
 use tools::{ListFilesTool, ReadFileTool, RunCommandTool, ToolType, TreeTool, WriteFileTool};
 
-pub struct Agent<P: Provider> {
+pub struct Agent<P: ProviderBase> {
     provider: P,
 }
 
-impl<P: Provider> Agent<P> {
+impl<P: ProviderBase> Agent<P> {
     pub fn new(provider: P) -> Self {
         Agent { provider }
     }

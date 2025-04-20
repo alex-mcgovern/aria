@@ -1,11 +1,11 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
-use providers::{models::ContentBlock, Provider, Role};
+use providers::{models::ContentBlock, ProviderBase, Role};
 
 /// The starting node
 #[derive(Debug)]
 pub struct Start;
 
-impl<P: Provider> NodeRunner<P> for Start {
+impl<P: ProviderBase> NodeRunner<P> for Start {
     async fn run(
         &self,
         state: &mut State,

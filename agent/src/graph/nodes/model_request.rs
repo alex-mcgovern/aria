@@ -1,6 +1,6 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
 use anyhow::Context;
-use providers::{Provider, StopReason};
+use providers::{ProviderBase, StopReason};
 
 /// The model request node
 ///
@@ -9,7 +9,7 @@ use providers::{Provider, StopReason};
 #[derive(Debug)]
 pub struct ModelRequest;
 
-impl<P: Provider> NodeRunner<P> for ModelRequest {
+impl<P: ProviderBase> NodeRunner<P> for ModelRequest {
     async fn run(
         &self,
         state: &mut State,

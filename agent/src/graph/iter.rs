@@ -1,9 +1,9 @@
 use crate::graph::models::{CurrentNode, Deps, GraphError, NodeRunner, NodeTransition, State};
 use crate::graph::nodes::{CallTools, End, ModelRequest, Start, UserRequest};
-use providers::{models::ContentBlock, Provider, Role};
+use providers::{models::ContentBlock, ProviderBase, Role};
 
 /// A struct to hold the state of a graph iteration
-pub struct GraphIter<P: Provider> {
+pub struct GraphIter<P: ProviderBase> {
     deps: Deps<P>,
     state: State,
     current_node: CurrentNode,
@@ -11,7 +11,7 @@ pub struct GraphIter<P: Provider> {
     result: Option<String>,
 }
 
-impl<P: Provider> GraphIter<P> {
+impl<P: ProviderBase> GraphIter<P> {
     /// Create a new graph iterator
     pub fn new(deps: Deps<P>, user_prompt: String) -> Self {
         let state = State {

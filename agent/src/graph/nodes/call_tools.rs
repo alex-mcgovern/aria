@@ -1,5 +1,5 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
-use providers::{models::ContentBlock, Message, Provider, Role};
+use providers::{models::ContentBlock, Message, ProviderBase, Role};
 use serde_json::Value;
 use tools::{
     models::{ToolName, ToolResult},
@@ -10,7 +10,7 @@ use tools::{
 #[derive(Debug)]
 pub struct CallTools;
 
-impl<P: Provider> NodeRunner<P> for CallTools {
+impl<P: ProviderBase> NodeRunner<P> for CallTools {
     async fn run(
         &self,
         state: &mut State,

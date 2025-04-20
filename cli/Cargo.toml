@@ -9,4 +9,6 @@ anyhow = { workspace = true }
 clap = { version = "4.5.36", features = ["derive"] }
 agent = { path = "../agent" }
 providers = { path = "../providers" }
+config = { path = "../config" }
 tokio = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
