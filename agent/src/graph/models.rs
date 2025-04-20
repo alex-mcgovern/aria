@@ -39,6 +39,8 @@ pub struct State {
     pub message_history: Vec<Message>,
     pub current_user_prompt: String,
     pub tool_outputs: HashMap<String, String>,
+    /// Flag to determine whether to use streaming mode or synchronous mode
+    pub use_streaming: bool,
 }
 
 /// Dependencies that nodes need to function

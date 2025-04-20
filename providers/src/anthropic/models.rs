@@ -1,5 +1,8 @@
 use crate::{
-    models::{ContentBlock, MessageContent, Request as GenericRequest, Role, Usage},
+    models::{
+        ContentBlock, ContentBlockStartData, ContentDelta, MessageContent, MessageDeltaData,
+        MessageStartData, Request as GenericRequest, Role, StreamEvent, StreamProcessor, Usage,
+    },
     Message, Response, ResponseContentBlock, StopReason,
 };
 use anyhow::{Context, Result};
@@ -187,6 +190,8 @@ pub struct AnthropicRequest {
     pub messages: Vec<AnthropicMessage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
 }
 
 impl TryFrom<GenericRequest> for AnthropicRequest {
@@ -224,6 +229,7 @@ impl TryFrom<GenericRequest> for AnthropicRequest {
             max_tokens: request.max_tokens,
             messages: messages?,
             tools,
+            stream: None,
         })
     }
 }
@@ -406,5 +412,453 @@ impl std::fmt::Display for AnthropicRequest {
             self.model.to_string(),
             self.max_tokens
         )
+    }
+}
+
+// Anthropic-specific streaming models
+
+/// Anthropic streaming content delta types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicContentDelta {
+    #[serde(rename = "text_delta")]
+    TextDelta { text: String },
+    #[serde(rename = "input_json_delta")]
+    InputJsonDelta { partial_json: String },
+    #[serde(rename = "thinking_delta")]
+    ThinkingDelta { thinking: String },
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
+}
+
+impl TryFrom<AnthropicContentDelta> for ContentDelta {
+    type Error = anyhow::Error;
+
+    fn try_from(delta: AnthropicContentDelta) -> Result<Self, Self::Error> {
+        match delta {
+            AnthropicContentDelta::TextDelta { text } => Ok(ContentDelta::TextDelta { text }),
+            AnthropicContentDelta::InputJsonDelta { partial_json } => {
+                Ok(ContentDelta::InputJsonDelta { partial_json })
+            }
+            AnthropicContentDelta::ThinkingDelta { thinking } => {
+                Ok(ContentDelta::ThinkingDelta { thinking })
+            }
+            AnthropicContentDelta::SignatureDelta { signature } => {
+                Ok(ContentDelta::SignatureDelta { signature })
+            }
+        }
+    }
+}
+
+/// Anthropic content block start data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicContentBlockStartData {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(rename = "thinking")]
+    Thinking { thinking: String },
+}
+
+impl TryFrom<AnthropicContentBlockStartData> for ContentBlockStartData {
+    type Error = anyhow::Error;
+
+    fn try_from(data: AnthropicContentBlockStartData) -> Result<Self, Self::Error> {
+        match data {
+            AnthropicContentBlockStartData::Text { text } => {
+                Ok(ContentBlockStartData::Text { text })
+            }
+            AnthropicContentBlockStartData::ToolUse { id, name, input } => {
+                Ok(ContentBlockStartData::ToolUse { id, name, input })
+            }
+            AnthropicContentBlockStartData::Thinking { thinking } => {
+                Ok(ContentBlockStartData::Thinking { thinking })
+            }
+        }
+    }
+}
+
+/// Anthropic message delta data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicMessageDeltaData {
+    pub stop_reason: Option<AnthropicStopReason>,
+    pub stop_sequence: Option<String>,
+}
+
+impl TryFrom<AnthropicMessageDeltaData> for MessageDeltaData {
+    type Error = anyhow::Error;
+
+    fn try_from(data: AnthropicMessageDeltaData) -> Result<Self, Self::Error> {
+        Ok(MessageDeltaData {
+            stop_reason: match data.stop_reason {
+                Some(reason) => Some(reason.try_into()?),
+                None => None,
+            },
+            stop_sequence: data.stop_sequence,
+        })
+    }
+}
+
+/// Anthropic message start data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicMessageStartData {
+    pub id: String,
+    #[serde(default)]
+    pub r#type: String,
+    pub role: AnthropicRole,
+    pub model: String,
+    pub content: Vec<AnthropicResponseContentBlock>,
+    pub stop_reason: Option<AnthropicStopReason>,
+    pub stop_sequence: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<AnthropicUsage>,
+}
+
+impl TryFrom<AnthropicMessageStartData> for MessageStartData {
+    type Error = anyhow::Error;
+
+    fn try_from(data: AnthropicMessageStartData) -> Result<Self, Self::Error> {
+        let content = data
+            .content
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(MessageStartData {
+            id: data.id,
+            r#type: data.r#type,
+            role: data.role.try_into()?,
+            model: data.model,
+            content,
+            stop_reason: data.stop_reason.map(|r| r.try_into()).transpose()?,
+            stop_sequence: data.stop_sequence,
+            usage: data.usage.map(|u| u.try_into()).transpose()?,
+        })
+    }
+}
+
+/// Anthropic error data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicStreamErrorData {
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub message: String,
+}
+
+/// Anthropic stream events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum AnthropicStreamEvent {
+    #[serde(rename = "message_start")]
+    MessageStart { message: AnthropicMessageStartData },
+    #[serde(rename = "content_block_start")]
+    ContentBlockStart {
+        index: usize,
+        content_block: AnthropicContentBlockStartData,
+    },
+    #[serde(rename = "content_block_delta")]
+    ContentBlockDelta {
+        index: usize,
+        delta: AnthropicContentDelta,
+    },
+    #[serde(rename = "content_block_stop")]
+    ContentBlockStop { index: usize },
+    #[serde(rename = "message_delta")]
+    MessageDelta {
+        delta: AnthropicMessageDeltaData,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        usage: Option<AnthropicUsage>,
+    },
+    #[serde(rename = "message_stop")]
+    MessageStop,
+    #[serde(rename = "ping")]
+    Ping,
+    #[serde(rename = "error")]
+    Error { error: AnthropicStreamErrorData },
+}
+
+impl TryFrom<AnthropicStreamEvent> for StreamEvent {
+    type Error = anyhow::Error;
+
+    fn try_from(
+        event: AnthropicStreamEvent,
+    ) -> std::result::Result<Self, <StreamEvent as TryFrom<AnthropicStreamEvent>>::Error> {
+        match event {
+            AnthropicStreamEvent::MessageStart { message } => Ok(StreamEvent::MessageStart {
+                message: message.try_into()?,
+            }),
+            AnthropicStreamEvent::ContentBlockStart {
+                index,
+                content_block,
+            } => Ok(StreamEvent::ContentBlockStart {
+                index,
+                content_block: content_block.try_into()?,
+            }),
+            AnthropicStreamEvent::ContentBlockDelta { index, delta } => {
+                Ok(StreamEvent::ContentBlockDelta {
+                    index,
+                    delta: delta.try_into()?,
+                })
+            }
+            AnthropicStreamEvent::ContentBlockStop { index } => {
+                Ok(StreamEvent::ContentBlockStop { index })
+            }
+            AnthropicStreamEvent::MessageDelta { delta, usage } => Ok(StreamEvent::MessageDelta {
+                delta: delta.try_into()?,
+                usage: usage.map(|u| u.try_into()).transpose()?,
+            }),
+            AnthropicStreamEvent::MessageStop => Ok(StreamEvent::MessageStop),
+            AnthropicStreamEvent::Ping => Ok(StreamEvent::Ping),
+            AnthropicStreamEvent::Error { error } => Ok(StreamEvent::Error {
+                error: crate::models::StreamErrorData {
+                    error_type: error.error_type,
+                    message: error.message,
+                },
+            }),
+        }
+    }
+}
+
+// Implement TryFrom for collections of events
+impl StreamProcessor for AnthropicStreamEvent {
+    fn process_events(events: Vec<AnthropicStreamEvent>) -> Result<Response> {
+        let mut id = String::new();
+        let mut model = String::new();
+        let mut role = AnthropicRole::Assistant;
+        let mut stop_reason = None;
+        let mut stop_sequence = None;
+        let mut usage = AnthropicUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+        };
+
+        // Track content blocks by index
+        let mut content_blocks: std::collections::HashMap<usize, AnthropicResponseContentBlock> =
+            std::collections::HashMap::new();
+
+        // Buffer for accumulating tool use JSON
+        let mut json_buffers: std::collections::HashMap<usize, String> =
+            std::collections::HashMap::new();
+
+        // Process all events
+        for event in events {
+            match event {
+                AnthropicStreamEvent::MessageStart { message } => {
+                    id = message.id;
+                    model = message.model;
+                    role = message.role;
+                    if let Some(event_usage) = message.usage {
+                        usage = event_usage;
+                    }
+                }
+                AnthropicStreamEvent::ContentBlockStart {
+                    index,
+                    content_block,
+                } => match content_block {
+                    AnthropicContentBlockStartData::Text { text } => {
+                        content_blocks.insert(index, AnthropicResponseContentBlock::Text { text });
+                    }
+                    AnthropicContentBlockStartData::ToolUse { id, name, input } => {
+                        content_blocks.insert(
+                            index,
+                            AnthropicResponseContentBlock::ToolUse {
+                                id,
+                                name: name.try_into()?,
+                                input,
+                            },
+                        );
+                    }
+                    _ => {} // Thinking blocks are not added to the final response
+                },
+                AnthropicStreamEvent::ContentBlockDelta { index, delta } => match delta {
+                    AnthropicContentDelta::TextDelta { text } => {
+                        if let Some(AnthropicResponseContentBlock::Text {
+                            text: existing_text,
+                        }) = content_blocks.get_mut(&index)
+                        {
+                            // Append text to existing text block
+                            existing_text.push_str(&text);
+                        } else {
+                            // Create new text block if it doesn't exist
+                            content_blocks
+                                .insert(index, AnthropicResponseContentBlock::Text { text });
+                        }
+                    }
+                    AnthropicContentDelta::InputJsonDelta { partial_json } => {
+                        // Buffer the partial JSON to be processed at content_block_stop
+                        json_buffers
+                            .entry(index)
+                            .and_modify(|e| e.push_str(&partial_json))
+                            .or_insert(partial_json);
+                    }
+                    _ => {} // Ignore thinking and signature deltas
+                },
+                AnthropicStreamEvent::ContentBlockStop { index } => {
+                    // If we've buffered JSON for a tool use, process it now
+                    if let Some(json_string) = json_buffers.remove(&index) {
+                        if let Some(AnthropicResponseContentBlock::ToolUse { input, .. }) =
+                            content_blocks.get_mut(&index)
+                        {
+                            // Parse the complete JSON string and update the tool use input
+                            match serde_json::from_str::<serde_json::Value>(&json_string) {
+                                Ok(json_value) => *input = json_value,
+                                Err(e) => {
+                                    return Err(anyhow::anyhow!("Failed to parse JSON: {}", e))
+                                }
+                            }
+                        }
+                    }
+                }
+                AnthropicStreamEvent::MessageDelta {
+                    delta,
+                    usage: delta_usage,
+                } => {
+                    stop_reason = delta.stop_reason;
+                    stop_sequence = delta.stop_sequence;
+                    if let Some(u) = delta_usage {
+                        usage = u;
+                    }
+                }
+                _ => {} // Ignore other events
+            }
+        }
+
+        // Convert the collected blocks into a vector sorted by index
+        let mut sorted_blocks: Vec<_> = content_blocks.into_iter().collect();
+        sorted_blocks.sort_by_key(|(index, _)| *index);
+        let content: Vec<AnthropicResponseContentBlock> =
+            sorted_blocks.into_iter().map(|(_, block)| block).collect();
+
+        // Build the final response
+        Ok(Response {
+            id,
+            r#type: "message".to_string(),
+            role: role.try_into()?,
+            model,
+            content: content
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<_>, _>>()?,
+            stop_reason: stop_reason.map(TryInto::try_into).transpose()?,
+            stop_sequence,
+            usage: usage.try_into()?,
+        })
+    }
+}
+
+// Add trait implementations for the generic StreamProcessor
+impl crate::models::StreamProcessor for StreamEvent {
+    fn process_events(events: Vec<StreamEvent>) -> Result<Response> {
+        // Convert generic events to Anthropic events
+        let anthropic_events: Result<Vec<AnthropicStreamEvent>> = events
+            .into_iter()
+            .map(|event| match event {
+                StreamEvent::MessageStart { message } => {
+                    // Convert MessageStartData to AnthropicMessageStartData
+                    let role: AnthropicRole = message.role.try_into()?;
+                    let content: Result<Vec<AnthropicResponseContentBlock>> =
+                        message.content.into_iter().map(TryInto::try_into).collect();
+                    let stop_reason = message
+                        .stop_reason
+                        .map(|reason| reason.try_into())
+                        .transpose()?;
+                    let usage = message.usage.map(|u| u.try_into()).transpose()?;
+
+                    Ok(AnthropicStreamEvent::MessageStart {
+                        message: AnthropicMessageStartData {
+                            id: message.id,
+                            r#type: message.r#type,
+                            role,
+                            model: message.model,
+                            content: content?,
+                            stop_reason,
+                            stop_sequence: message.stop_sequence,
+                            usage,
+                        },
+                    })
+                }
+                StreamEvent::ContentBlockStart {
+                    index,
+                    content_block,
+                } => {
+                    // Convert ContentBlockStartData to AnthropicContentBlockStartData
+                    let anthropic_content_block = match content_block {
+                        ContentBlockStartData::Text { text } => {
+                            AnthropicContentBlockStartData::Text { text }
+                        }
+                        ContentBlockStartData::ToolUse { id, name, input } => {
+                            AnthropicContentBlockStartData::ToolUse { id, name, input }
+                        }
+                        ContentBlockStartData::Thinking { thinking } => {
+                            AnthropicContentBlockStartData::Thinking { thinking }
+                        }
+                    };
+
+                    Ok(AnthropicStreamEvent::ContentBlockStart {
+                        index,
+                        content_block: anthropic_content_block,
+                    })
+                }
+                StreamEvent::ContentBlockDelta { index, delta } => {
+                    // Convert ContentDelta to AnthropicContentDelta
+                    let anthropic_delta = match delta {
+                        ContentDelta::TextDelta { text } => {
+                            AnthropicContentDelta::TextDelta { text }
+                        }
+                        ContentDelta::InputJsonDelta { partial_json } => {
+                            AnthropicContentDelta::InputJsonDelta { partial_json }
+                        }
+                        ContentDelta::ThinkingDelta { thinking } => {
+                            AnthropicContentDelta::ThinkingDelta { thinking }
+                        }
+                        ContentDelta::SignatureDelta { signature } => {
+                            AnthropicContentDelta::SignatureDelta { signature }
+                        }
+                    };
+
+                    Ok(AnthropicStreamEvent::ContentBlockDelta {
+                        index,
+                        delta: anthropic_delta,
+                    })
+                }
+                StreamEvent::ContentBlockStop { index } => {
+                    Ok(AnthropicStreamEvent::ContentBlockStop { index })
+                }
+                StreamEvent::MessageDelta { delta, usage } => {
+                    // Convert MessageDeltaData to AnthropicMessageDeltaData
+                    let stop_reason = delta
+                        .stop_reason
+                        .map(|reason| reason.try_into())
+                        .transpose()?;
+
+                    Ok(AnthropicStreamEvent::MessageDelta {
+                        delta: AnthropicMessageDeltaData {
+                            stop_reason,
+                            stop_sequence: delta.stop_sequence,
+                        },
+                        usage: usage.map(|u| u.try_into()).transpose()?,
+                    })
+                }
+                StreamEvent::MessageStop => Ok(AnthropicStreamEvent::MessageStop),
+                StreamEvent::Ping => Ok(AnthropicStreamEvent::Ping),
+                StreamEvent::Error { error } => Ok(AnthropicStreamEvent::Error {
+                    error: AnthropicStreamErrorData {
+                        error_type: error.error_type,
+                        message: error.message,
+                    },
+                }),
+            })
+            .collect();
+
+        // Process the Anthropic events
+        AnthropicStreamEvent::process_events(anthropic_events?)
     }
 }

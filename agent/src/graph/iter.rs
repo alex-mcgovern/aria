@@ -13,11 +13,12 @@ pub struct GraphIter<P: BaseProvider> {
 
 impl<P: BaseProvider> GraphIter<P> {
     /// Create a new graph iterator
-    pub fn new(deps: Deps<P>, user_prompt: String) -> Self {
+    pub fn new(deps: Deps<P>, user_prompt: String, use_streaming: bool) -> Self {
         let state = State {
             message_history: Vec::new(),
             current_user_prompt: user_prompt,
             tool_outputs: std::collections::HashMap::new(),
+            use_streaming,
         };
 
         GraphIter {

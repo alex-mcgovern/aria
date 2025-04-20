@@ -24,6 +24,22 @@ impl<P: BaseProvider> Agent<P> {
     where
         P: Clone,
     {
+        // Default to non-streaming mode for backward compatibility
+        self.iter_with_options(user_prompt, system_prompt, max_tokens, temperature, false)
+    }
+    
+    /// Process input with configurable options including streaming
+    pub fn iter_with_options(
+        &self,
+        user_prompt: &str,
+        system_prompt: &str,
+        max_tokens: u32,
+        temperature: Option<f64>,
+        use_streaming: bool,
+    ) -> GraphIter<P>
+    where
+        P: Clone,
+    {
         let tools: Vec<ToolType> = vec![
             ToolType::ListFiles(ListFilesTool),
             ToolType::ReadFile(ReadFileTool),
@@ -31,7 +47,7 @@ impl<P: BaseProvider> Agent<P> {
             ToolType::Tree(TreeTool),
             ToolType::WriteFile(WriteFileTool),
         ];
-
+        
         // Create the dependencies for GraphIter
         let deps = Deps {
             provider: self.provider.clone(),
@@ -40,8 +56,8 @@ impl<P: BaseProvider> Agent<P> {
             max_tokens,
             temperature,
         };
-
-        // Create GraphIter directly
-        GraphIter::new(deps, user_prompt.to_string())
+        
+        // Create GraphIter with streaming flag
+        GraphIter::new(deps, user_prompt.to_string(), use_streaming)
     }
 }

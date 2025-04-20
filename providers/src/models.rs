@@ -146,18 +146,121 @@ pub struct Response {
     pub usage: Usage,
 }
 
+/// Generic types for streaming events
+
+/// Represents the content delta types in a streaming response
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ContentDelta {
+    #[serde(rename = "text_delta")]
+    TextDelta { text: String },
+    #[serde(rename = "input_json_delta")]
+    InputJsonDelta { partial_json: String },
+    #[serde(rename = "thinking_delta")]
+    ThinkingDelta { thinking: String },
+    #[serde(rename = "signature_delta")]
+    SignatureDelta { signature: String },
+}
+
+/// Represents the different types of streaming events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum StreamEvent {
+    #[serde(rename = "message_start")]
+    MessageStart { message: MessageStartData },
+    #[serde(rename = "content_block_start")]
+    ContentBlockStart {
+        index: usize,
+        content_block: ContentBlockStartData,
+    },
+    #[serde(rename = "content_block_delta")]
+    ContentBlockDelta { index: usize, delta: ContentDelta },
+    #[serde(rename = "content_block_stop")]
+    ContentBlockStop { index: usize },
+    #[serde(rename = "message_delta")]
+    MessageDelta {
+        delta: MessageDeltaData,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        usage: Option<Usage>,
+    },
+    #[serde(rename = "message_stop")]
+    MessageStop,
+    #[serde(rename = "ping")]
+    Ping,
+    #[serde(rename = "error")]
+    Error { error: StreamErrorData },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamErrorData {
+    #[serde(rename = "type")]
+    pub error_type: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageDeltaData {
+    pub stop_reason: Option<StopReason>,
+    pub stop_sequence: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ContentBlockStartData {
+    #[serde(rename = "text")]
+    Text { text: String },
+    #[serde(rename = "tool_use")]
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    #[serde(rename = "thinking")]
+    Thinking { thinking: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageStartData {
+    pub id: String,
+    #[serde(default)]
+    pub r#type: String,
+    pub role: Role,
+    pub model: String,
+    pub content: Vec<ResponseContentBlock>,
+    pub stop_reason: Option<StopReason>,
+    pub stop_sequence: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
+}
+
+/// A trait for implementing stream processing capability
+pub trait StreamProcessor {
+    /// Process a vector of stream events into a Response
+    fn process_events(events: Vec<StreamEvent>) -> Result<Response>;
+}
+
 /// A trait for LLM providers
 pub trait BaseProvider {
     /// Initialize the provider with API keys and other configuration
     fn new(api_key: String, model: String, base_url: Option<String>) -> Result<Self>
     where
         Self: Sized;
+
     /// Send a prompt to the provider and get a response
     fn sync(
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
     ) -> impl std::future::Future<Output = Result<Response>> + Send;
+
+    /// Stream a response from the provider
+    fn stream(
+        &self,
+        messages: &Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> impl std::future::Future<
+        Output = Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send>,
+    > + Send;
 }
 
 /// A provider factory that creates and manages specific LLM provider implementations
@@ -189,6 +292,17 @@ impl Provider {
             Provider::Anthropic(provider) => provider.sync(messages, tools).await,
         }
     }
+
+    /// Stream a response from the provider
+    pub async fn stream<'a>(
+        &'a self,
+        messages: &'a Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send + 'a> {
+        match self {
+            Provider::Anthropic(provider) => provider.stream(messages, tools).await,
+        }
+    }
 }
 
 impl BaseProvider for Provider {
@@ -208,5 +322,13 @@ impl BaseProvider for Provider {
         match self {
             Provider::Anthropic(provider) => provider.sync(messages, tools).await,
         }
+    }
+
+    async fn stream<'a>(
+        &'a self,
+        messages: &'a Vec<Message>,
+        tools: Option<Vec<ToolType>>,
+    ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send + 'a> {
+        self.stream(messages, tools).await
     }
 }
