@@ -24,8 +24,9 @@ impl Tool<RunCommandInput> for RunCommandTool {
     }
 
     fn description(&self) -> &'static str {
-        "Executes a shell command with the specified arguments. Use with caution as shell commands can be \
-        potentially dangerous. Always validate and sanitize inputs before passing them to this tool. \
+        "Executes a shell command with the specified arguments. The 'cmd' parameter is a string (like 'ls' or 'git'), \
+        and 'args' is a list of strings for the command arguments (like ['-l', '/tmp']). Use with caution as shell \
+        commands can be potentially dangerous. Always validate and sanitize inputs before passing them to this tool. \
         Avoid commands that require interactive input as this tool doesn't handle stdin interactions."
     }
 
