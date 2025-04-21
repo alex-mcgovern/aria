@@ -2,6 +2,10 @@
 
 Aria is a lightweight agentic codegen assistant that runs in your terminal (for now).
 
+## Demo
+
+https://github.com/user-attachments/assets/dddc0ff0-a389-44dd-a062-b5a78e1f15a4
+
 ## Features
 
 - CLI-based interface with both interactive and command execution modes
