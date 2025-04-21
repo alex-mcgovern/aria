@@ -1,6 +1,6 @@
-# Aria - Agentic Reasoning and Implementation Assistant
+# A.R.I.A - Agentic Reasoning and Implementation Assistant
 
-Aria is a lightweight agentic codegen assistant built over a weekend. It helps with code editing tasks by providing an AI-driven interface to assist with your development workflow.
+Aria is a lightweight agentic codegen assistant that runs in your terminal (for now).
 
 ## Features
 
