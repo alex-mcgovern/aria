@@ -41,7 +41,7 @@ Aria is configured via an `aria.yml` file, which can be placed in:
 provider: Anthropic
 api_key: "your_api_key_here"  # Optional (default: None) — some providers may require it
 model: "claude-3-7-sonnet-20250219"
-max_tokens: 8192  # Optional (default: 8192)
+max_tokens: 8192  # Optional (default: 4096)
 temperature: 0.7  # Optional (default: 0.7)
 provider_base_url: "https://api.anthropic.com"  # Optional — a default is provided for each provider
 ```
