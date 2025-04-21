@@ -101,7 +101,7 @@ where
     let mut graph_iter = agent.iter(
         input,
         DEFAULT_SYSTEM_PROMPT,
-        config.response_max_tokens,
+        config.max_tokens,
         Some(config.temperature as f64),
         Some(stream_wrapper),
     );
