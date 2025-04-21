@@ -13,7 +13,6 @@ use tools::ToolType;
 use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
-// Default max tokens if none is provided, keeping as a constant for clarity
 const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 #[derive(Clone)]
