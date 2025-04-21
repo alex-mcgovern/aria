@@ -107,10 +107,8 @@ async fn execute_with_graph_iter<P: BaseProvider>(
 where
     P: Clone,
 {
-    // Create a CLI stream wrapper
     let stream_wrapper = Box::new(CliStreamWrapper);
 
-    // Create graph iterator with our stream wrapper
     let mut graph_iter = agent.iter(
         input,
         DEFAULT_SYSTEM_PROMPT,
@@ -119,16 +117,12 @@ where
         Some(stream_wrapper),
     );
 
-    // Process each node
     while let Some(node_result) = graph_iter.next().await {
         match node_result {
             Ok(node) => {
-                // All streaming is handled by the CliStreamWrapper, so we don't need to do anything here
-                // with the stream_receiver anymore
                 if matches!(node, CurrentNode::UserRequest) {
                     if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
-                            // Look for text content in the array
                             for content_block in &last_message.content {
                                 if let ContentBlock::Text { text } = content_block {
                                     println!("Response received: {}", text);
