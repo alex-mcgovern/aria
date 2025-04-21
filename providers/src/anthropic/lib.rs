@@ -34,6 +34,8 @@ impl BaseProvider for AnthropicProvider {
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
+        max_tokens: Option<u32>,
+        temperature: Option<f64>,
     ) -> Result<impl Stream<Item = Result<StreamEvent>> + Send> {
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", HeaderValue::from_str(&self.api_key)?);
@@ -62,9 +64,9 @@ impl BaseProvider for AnthropicProvider {
 
         let request = AnthropicRequest {
             system_prompt: String::new(),
-            temperature: None,
+            temperature,
             model: self.model.clone(),
-            max_tokens: 1024,
+            max_tokens: max_tokens.unwrap_or(1024),
             messages,
             tools,
             stream: Some(true),

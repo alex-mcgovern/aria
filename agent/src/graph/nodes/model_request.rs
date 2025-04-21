@@ -19,10 +19,10 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
         deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
         let message_history = state.message_history.clone();
-
+        
         let stream = deps
             .provider
-            .stream(&message_history, deps.tools.clone())
+            .stream(&message_history, deps.tools.clone(), Some(deps.max_tokens), deps.temperature)
             .await
             .context("Failed to create stream from provider")?;
 

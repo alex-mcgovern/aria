@@ -244,6 +244,8 @@ pub trait BaseProvider {
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
+        max_tokens: Option<u32>,
+        temperature: Option<f64>,
     ) -> impl std::future::Future<
         Output = Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send>,
     > + Send;
@@ -273,9 +275,11 @@ impl Provider {
         &'a self,
         messages: &'a Vec<Message>,
         tools: Option<Vec<ToolType>>,
+        max_tokens: Option<u32>,
+        temperature: Option<f64>,
     ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send + 'a> {
         match self {
-            Provider::Anthropic(provider) => provider.stream(messages, tools).await,
+            Provider::Anthropic(provider) => provider.stream(messages, tools, max_tokens, temperature).await,
         }
     }
 }
@@ -293,9 +297,11 @@ impl BaseProvider for Provider {
         &self,
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
+        max_tokens: Option<u32>,
+        temperature: Option<f64>,
     ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send> {
         match self {
-            Provider::Anthropic(provider) => provider.stream(messages, tools).await,
+            Provider::Anthropic(provider) => provider.stream(messages, tools, max_tokens, temperature).await,
         }
     }
 }
