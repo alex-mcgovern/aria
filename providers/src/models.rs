@@ -304,7 +304,6 @@ impl BaseProvider for Provider {
         messages: &Vec<Message>,
         tools: Option<Vec<ToolType>>,
     ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send> {
-        // Call the Provider::stream method instead of recursively calling itself
         match self {
             Provider::Anthropic(provider) => provider.stream(messages, tools).await,
         }

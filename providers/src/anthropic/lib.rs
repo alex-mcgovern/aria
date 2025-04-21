@@ -12,6 +12,8 @@ use tools::ToolType;
 
 use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
 
+const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
+
 #[derive(Clone)]
 pub struct AnthropicProvider {
     api_key: String,
@@ -24,7 +26,7 @@ impl BaseProvider for AnthropicProvider {
         Ok(AnthropicProvider {
             api_key,
             model: model.try_into()?,
-            base_url: base_url.unwrap_or_else(|| "https://api.anthropic.com".to_string()),
+            base_url: base_url.unwrap_or_else(|| DEFAULT_BASE_URL.to_string()),
         })
     }
 
