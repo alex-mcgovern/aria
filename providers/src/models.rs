@@ -58,7 +58,7 @@ pub enum MessageContent {
     ContentList(Vec<ContentBlock>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: Role,
     pub content: Vec<ContentBlock>,

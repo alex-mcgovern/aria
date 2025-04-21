@@ -3,10 +3,11 @@ use crate::{
     Message,
 };
 use anyhow::{Context, Result};
-use async_stream::try_stream;
 use futures_util::stream::{Stream, StreamExt};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE};
 use reqwest_eventsource::{Error as EventSourceError, EventSource};
+use std::pin::Pin;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 use tools::ToolType;
 
 use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
@@ -76,32 +77,57 @@ impl BaseProvider for AnthropicProvider {
                 .json(&request),
         )?;
 
-        Ok(try_stream! {
+        Ok(self.handle_event_stream(event_source))
+    }
+}
+
+impl AnthropicProvider {
+    fn handle_event_stream(
+        &self,
+        event_source: EventSource,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent>> + Send>> {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+
+        tokio::spawn(async move {
             let mut event_source = event_source;
 
             while let Some(event_result) = event_source.next().await {
                 match event_result {
-                    // The `open` event can just be mapped
-                    // to a ping (which is just a heartbeat)
                     Ok(reqwest_eventsource::Event::Open) => {
-                        yield StreamEvent::Ping;
-                    },
+                        if let Err(e) = tx.send(Ok(StreamEvent::Ping)) {
+                            eprintln!("Failed to send ping event: {}", e);
+                            break;
+                        }
+                    }
                     Ok(reqwest_eventsource::Event::Message(message)) => {
-                        let anthropic_event: AnthropicStreamEvent =
-                            serde_json::from_str(&message.data)
-                                .context("Failed to parse Anthropic stream event")?;
+                        let result: Result<StreamEvent> = (|| {
+                            let anthropic_event: AnthropicStreamEvent =
+                                serde_json::from_str(&message.data)
+                                    .context("Failed to parse Anthropic stream event")?;
 
-                        yield anthropic_event.try_into()?;
-                    },
-                    // No idea why they decided to use an error
-                    // event for the end of the stream ¯\_(ツ)_/¯
-                    Err(EventSourceError::StreamEnded) => break,
-                    Err(err) => Err(err)?
+                            anthropic_event.try_into()
+                        })();
+
+                        if let Err(e) = tx.send(result) {
+                            eprintln!("Failed to send stream event: {}", e);
+                            break;
+                        }
+                    }
+                    Err(EventSourceError::StreamEnded) => {
+                        event_source.close();
+                        break;
+                    }
+                    Err(err) => {
+                        if let Err(e) = tx.send(Err(anyhow::Error::new(err))) {
+                            eprintln!("Failed to send error event: {}", e);
+                        }
+                        event_source.close();
+                        break;
+                    }
                 }
             }
+        });
 
-            // Close the event source when we're done
-            event_source.close();
-        })
+        Box::pin(UnboundedReceiverStream::new(rx))
     }
 }

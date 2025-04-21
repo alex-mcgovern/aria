@@ -173,6 +173,7 @@ where
         // Use the graph iterator
         if let Err(e) = execute_with_graph_iter(agent, input, config).await {
             eprintln!("Error: {}", e);
+            std::io::stdout().flush().expect("Failed to flush stdout");
         }
     }
 

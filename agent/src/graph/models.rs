@@ -1,5 +1,5 @@
 use futures_util::Stream;
-use providers::models::{ContentBlockStartData, ContentDelta, StreamEvent};
+use providers::models::StreamEvent;
 use providers::{BaseProvider, Message};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
