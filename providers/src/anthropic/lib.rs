@@ -63,7 +63,6 @@ impl BaseProvider for AnthropicProvider {
             })
             .transpose()?;
 
-        // Use the provided max_tokens value, defaulting to a higher value if none is provided
         let request = AnthropicRequest {
             system_prompt: String::new(),
             temperature,
