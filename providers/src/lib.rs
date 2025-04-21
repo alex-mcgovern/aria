@@ -3,7 +3,7 @@ pub mod models;
 
 // Re-export common types and traits from models
 pub use models::{
-    BaseProvider, ContentBlock, Message, MessageContent, Provider, Request, Response,
+    BaseProvider, ContentBlock, Message, Provider, ProviderType, Request, Response,
     ResponseContentBlock, Role, StopReason,
 };
 

@@ -9,3 +9,4 @@ serde_yaml = "0.9"
 thiserror = "1.0"
 dirs = "5.0"
 providers = { path = "../providers" }
+anyhow = { workspace = true }

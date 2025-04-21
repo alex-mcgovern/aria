@@ -1,10 +1,15 @@
 use agent::{Agent, CurrentNode};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use config::{load_config_file, Config, ProviderType};
+use config::{load_config_file, Config};
 use providers::{models::ContentBlock, Role};
 use providers::{BaseProvider, Provider};
+use std::convert::TryFrom;
 use std::io::{self, Write};
+
+// Import the stream wrapper
+mod stream_wrapper;
+use stream_wrapper::CliStreamWrapper;
 
 // Constants for the process_input_with_graph parameters
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an AI assistant helping with code editing tasks. \
@@ -52,8 +57,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Create provider based on config
-    let provider = create_provider_from_config(&config)?;
+    // Create provider based on config using TryFrom
+    let provider = Provider::try_from(&config)?;
 
     // Create agent
     let agent = Agent::new(provider);
@@ -83,18 +88,6 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-// Create a provider from config without relying on TryFrom implementation
-fn create_provider_from_config(config: &Config) -> Result<Provider> {
-    // Create provider based on config type
-    match &config.provider {
-        ProviderType::Anthropic => Provider::new_anthropic(
-            config.api_key.clone(),
-            config.model.clone(),
-            config.provider_base_url.clone(),
-        ),
-    }
-}
-
 async fn execute_with_graph_iter<P: BaseProvider>(
     agent: &Agent<P>,
     input: &str,
@@ -103,26 +96,22 @@ async fn execute_with_graph_iter<P: BaseProvider>(
 where
     P: Clone,
 {
-    println!("Processing input: {}", input);
+    let stream_wrapper = Box::new(CliStreamWrapper);
 
-    // Create graph iterator
     let mut graph_iter = agent.iter(
         input,
         DEFAULT_SYSTEM_PROMPT,
-        config.response_max_tokens,
+        config.max_tokens,
         Some(config.temperature as f64),
+        Some(stream_wrapper),
     );
 
-    // Process each node
     while let Some(node_result) = graph_iter.next().await {
         match node_result {
             Ok(node) => {
-                println!("Processing node: {:?}", node);
-                // Special handling for UserRequest node
                 if matches!(node, CurrentNode::UserRequest) {
                     if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
-                            // Look for text content in the array
                             for content_block in &last_message.content {
                                 if let ContentBlock::Text { text } = content_block {
                                     println!("Response received: {}", text);
@@ -140,12 +129,6 @@ where
         }
     }
 
-    // Get the final result
-    if let Some(result) = graph_iter.get_result() {
-        println!("Final result: {}", result);
-    } else {
-        println!("No final result available");
-    }
     Ok(())
 }
 
@@ -154,6 +137,7 @@ where
     P: Clone,
 {
     println!("Interactive mode. Enter 'exit' or 'quit' to end the session.");
+
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -172,7 +156,9 @@ where
         // Use the graph iterator
         if let Err(e) = execute_with_graph_iter(agent, input, config).await {
             eprintln!("Error: {}", e);
+            std::io::stdout().flush().expect("Failed to flush stdout");
         }
     }
+
     Ok(())
 }

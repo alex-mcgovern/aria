@@ -1,6 +1,7 @@
 use providers::BaseProvider;
 
 pub mod graph;
+pub use graph::models::StreamWrapper;
 pub use graph::{CurrentNode, Deps, GraphError, GraphIter, NodeRunner, NodeTransition, State};
 use tools::{ListFilesTool, ReadFileTool, RunCommandTool, ToolType, TreeTool, WriteFileTool};
 
@@ -13,13 +14,13 @@ impl<P: BaseProvider> Agent<P> {
         Agent { provider }
     }
 
-    /// Process input using the graph-based state machine and return an iterator
     pub fn iter(
         &self,
         user_prompt: &str,
         system_prompt: &str,
         max_tokens: u32,
         temperature: Option<f64>,
+        stream_wrapper: Option<Box<dyn StreamWrapper>>,
     ) -> GraphIter<P>
     where
         P: Clone,
@@ -32,16 +33,15 @@ impl<P: BaseProvider> Agent<P> {
             ToolType::WriteFile(WriteFileTool),
         ];
 
-        // Create the dependencies for GraphIter
-        let deps = Deps {
-            provider: self.provider.clone(),
-            tools: Some(tools),
-            system_prompt: system_prompt.to_string(),
+        let deps = Deps::new(
+            self.provider.clone(),
+            Some(tools),
+            system_prompt.to_string(),
             max_tokens,
             temperature,
-        };
+            stream_wrapper,
+        );
 
-        // Create GraphIter directly
         GraphIter::new(deps, user_prompt.to_string())
     }
 }

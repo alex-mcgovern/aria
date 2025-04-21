@@ -1,6 +1,9 @@
-use providers::{Message, BaseProvider};
+use futures_util::Stream;
+use providers::models::StreamEvent;
+use providers::{BaseProvider, Message};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
+use std::pin::Pin;
 use tools::ToolType;
 
 /// Custom error type for the graph
@@ -33,6 +36,28 @@ impl From<anyhow::Error> for GraphError {
     }
 }
 
+/// A trait for wrapping the stream from the provider
+pub trait StreamWrapper: Send + Sync {
+    fn wrap<'a>(
+        &'a self,
+        stream: Pin<Box<dyn Stream<Item = anyhow::Result<StreamEvent>> + Send + 'a>>,
+    ) -> Pin<Box<dyn Stream<Item = anyhow::Result<StreamEvent>> + Send + 'a>>;
+}
+
+/// Default implementation of StreamWrapper that does nothing
+#[derive(Default, Debug)]
+pub struct NoopStreamWrapper;
+
+impl StreamWrapper for NoopStreamWrapper {
+    fn wrap<'a>(
+        &'a self,
+        stream: Pin<Box<dyn Stream<Item = anyhow::Result<StreamEvent>> + Send + 'a>>,
+    ) -> Pin<Box<dyn Stream<Item = anyhow::Result<StreamEvent>> + Send + 'a>> {
+        // Just return the stream unchanged
+        stream
+    }
+}
+
 /// State shared between nodes
 #[derive(Debug)]
 pub struct State {
@@ -48,6 +73,28 @@ pub struct Deps<P: BaseProvider> {
     pub system_prompt: String,
     pub max_tokens: u32,
     pub temperature: Option<f64>,
+    pub stream_wrapper: Box<dyn StreamWrapper>,
+}
+
+impl<P: BaseProvider> Deps<P> {
+    pub fn new(
+        provider: P,
+        tools: Option<Vec<ToolType>>,
+        system_prompt: String,
+        max_tokens: u32,
+        temperature: Option<f64>,
+        stream_wrapper: Option<Box<dyn StreamWrapper>>,
+    ) -> Self {
+        Self {
+            provider,
+            tools,
+            system_prompt,
+            max_tokens,
+            temperature,
+            stream_wrapper: stream_wrapper
+                .unwrap_or_else(|| Box::new(NoopStreamWrapper::default())),
+        }
+    }
 }
 
 /// A trait for running node logic without the associated type

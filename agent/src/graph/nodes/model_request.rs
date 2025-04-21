@@ -1,6 +1,9 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
 use anyhow::Context;
-use providers::{BaseProvider, StopReason};
+use futures_util::StreamExt;
+use providers::models::StreamEvent;
+use providers::Response;
+use providers::{models::StreamProcessor, BaseProvider, StopReason};
 
 /// The model request node
 ///
@@ -15,31 +18,37 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
         state: &mut State,
         deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
-        // Send the current message history to the LLM provider
-        let response = deps
+        let message_history = state.message_history.clone();
+        
+        let stream = deps
             .provider
-            .sync(&state.message_history, deps.tools.clone())
+            .stream(&message_history, deps.tools.clone(), Some(deps.max_tokens), deps.temperature)
             .await
-            .context("Failed to send prompt to provider")?;
+            .context("Failed to create stream from provider")?;
 
-        // Push message with content array containing the block
-        state.message_history.push(
-            response
-                .clone()
-                .try_into()
-                .context("Failed to convert response to message")?,
-        );
+        let mut events = Vec::new();
+        let mut stream = deps.stream_wrapper.wrap(Box::pin(stream));
 
-        // Route based on stop reason
+        while let Some(event_result) = stream.next().await {
+            let event = event_result.context("Error in event stream")?;
+            events.push(event);
+        }
+
+        let response: Response =
+            <StreamEvent as StreamProcessor<StreamEvent>>::process_events(events)
+                .context("Failed to process stream events")?;
+
+        let message = response
+            .clone()
+            .try_into()
+            .context("Failed to convert response to message")?;
+
+        state.message_history.push(message);
+
         match response.stop_reason {
-            Some(StopReason::MaxTokens) => {
-                return Err(GraphError::MaxTokens);
-            }
+            Some(StopReason::MaxTokens) => Err(GraphError::MaxTokens),
             Some(StopReason::ToolUse) => Ok(NodeTransition::ToCallTools),
-            _ => {
-                // EndTurn, StopSequence, or None
-                Ok(NodeTransition::ToEnd)
-            }
+            _ => Ok(NodeTransition::ToEnd),
         }
     }
 }

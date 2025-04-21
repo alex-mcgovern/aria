@@ -12,3 +12,5 @@ providers = { path = "../providers" }
 config = { path = "../config" }
 tokio = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
+futures-util = { workspace = true }
+pin-project-lite = "0.2.9"
