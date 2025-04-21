@@ -1,8 +1,9 @@
 use crate::graph::models::{Deps, GraphError, NodeRunner, NodeTransition, State};
 use anyhow::Context;
 use futures_util::StreamExt;
-use providers::models::StreamEvent;
+use providers::models::{ContentBlockStartData, ContentDelta, StreamEvent};
 use providers::{models::StreamProcessor, BaseProvider, StopReason};
+use std::sync::mpsc;
 
 /// The model request node
 ///
@@ -11,15 +12,22 @@ use providers::{models::StreamProcessor, BaseProvider, StopReason};
 #[derive(Debug)]
 pub struct ModelRequest;
 
+// Add a struct to represent streamed text for the ModelRequest node
+pub struct StreamedText {
+    pub text: String,
+}
+
 impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
     async fn run(
         &self,
         state: &mut State,
         deps: &Deps<P>,
     ) -> std::result::Result<NodeTransition, GraphError> {
+        // Setup a channel for yielding text parts
+        let (text_sender, text_receiver) = mpsc::channel();
+        state.stream_receiver = Some(text_receiver);
+
         // Run the stream, process the events and collect them into a `Response`
-        // Note that `Response` can be tried into `Message` directly, so we just
-        // push this into the message history
         let response = {
             let stream = deps
                 .provider
@@ -33,6 +41,28 @@ impl<P: BaseProvider> NodeRunner<P> for ModelRequest {
 
             while let Some(event_result) = stream.next().await {
                 let event = event_result.context("Error in event stream")?;
+
+                // Yield text parts when they come in
+                match &event {
+                    StreamEvent::ContentBlockStart { content_block, .. } => {
+                        if let ContentBlockStartData::Text { text } = content_block {
+                            if !text.is_empty() {
+                                // Send initial text
+                                let _ = text_sender.send(StreamedText { text: text.clone() });
+                            }
+                        }
+                    }
+                    StreamEvent::ContentBlockDelta { delta, .. } => {
+                        if let ContentDelta::TextDelta { text } = delta {
+                            if !text.is_empty() {
+                                // Send text delta
+                                let _ = text_sender.send(StreamedText { text: text.clone() });
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+
                 events.push(event);
             }
 

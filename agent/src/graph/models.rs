@@ -1,7 +1,11 @@
 use providers::{BaseProvider, Message};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display};
+use std::sync::mpsc;
 use tools::ToolType;
+
+// Import the StreamedText struct from nodes re-export, not directly from model_request
+use crate::graph::nodes::StreamedText;
 
 /// Custom error type for the graph
 #[derive(Debug)]
@@ -39,6 +43,8 @@ pub struct State {
     pub message_history: Vec<Message>,
     pub current_user_prompt: String,
     pub tool_outputs: HashMap<String, String>,
+    /// Channel for receiving streamed text from the model
+    pub stream_receiver: Option<mpsc::Receiver<StreamedText>>,
 }
 
 /// Dependencies that nodes need to function

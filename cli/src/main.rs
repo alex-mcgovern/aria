@@ -117,8 +117,20 @@ where
     while let Some(node_result) = graph_iter.next().await {
         match node_result {
             Ok(node) => {
-                println!("Processing node: {:?}", node);
-                if matches!(node, CurrentNode::UserRequest) {
+                // Handle streamed text for ModelRequest node
+                if matches!(node, CurrentNode::ModelRequest) {
+                    // Try to receive streamed text from the receiver if it exists
+                    if let Some(ref receiver) = graph_iter.state().stream_receiver {
+                        io::stdout().flush()?;
+
+                        // Try receiving text parts until the channel is empty or closed
+                        while let Ok(text_part) = receiver.try_recv() {
+                            print!("{}", text_part.text);
+                            io::stdout().flush()?;
+                        }
+                        println!(); // Add a newline after all text parts are received
+                    }
+                } else if matches!(node, CurrentNode::UserRequest) {
                     if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
                             // Look for text content in the array

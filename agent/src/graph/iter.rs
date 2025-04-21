@@ -18,6 +18,7 @@ impl<P: BaseProvider> GraphIter<P> {
             message_history: Vec::new(),
             current_user_prompt: user_prompt,
             tool_outputs: std::collections::HashMap::new(),
+            stream_receiver: None,
         };
 
         GraphIter {
