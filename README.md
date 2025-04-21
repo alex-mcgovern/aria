@@ -23,6 +23,9 @@ Coming soon (maybe):
 
 ## Installation
 
+> [!NOTE]  
+> This is a "toy" project, not intended for distribution, if you wish to use it locally, you will need to install it from source.
+
 Install from the project root directory:
 
 ```bash
