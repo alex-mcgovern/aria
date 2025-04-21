@@ -109,6 +109,8 @@ dependencies = [
  "anyhow",
  "clap",
  "config",
+ "futures-util",
+ "pin-project-lite",
  "providers",
  "serde",
  "tokio",

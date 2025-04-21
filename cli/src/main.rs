@@ -6,6 +6,10 @@ use providers::{models::ContentBlock, Role};
 use providers::{BaseProvider, Provider};
 use std::io::{self, Write};
 
+// Import the stream wrapper
+mod stream_wrapper;
+use stream_wrapper::CliStreamWrapper;
+
 // Constants for the process_input_with_graph parameters
 const DEFAULT_SYSTEM_PROMPT: &str = "You are an AI assistant helping with code editing tasks. \
 The user will provide a request, and you can use tools to help them. \
@@ -103,34 +107,25 @@ async fn execute_with_graph_iter<P: BaseProvider>(
 where
     P: Clone,
 {
-    println!("Processing input: {}", input);
+    // Create a CLI stream wrapper
+    let stream_wrapper = Box::new(CliStreamWrapper);
 
-    // Create graph iterator
+    // Create graph iterator with our stream wrapper
     let mut graph_iter = agent.iter(
         input,
         DEFAULT_SYSTEM_PROMPT,
         config.response_max_tokens,
         Some(config.temperature as f64),
+        Some(stream_wrapper),
     );
 
     // Process each node
     while let Some(node_result) = graph_iter.next().await {
         match node_result {
             Ok(node) => {
-                // Handle streamed text for ModelRequest node
-                if matches!(node, CurrentNode::ModelRequest) {
-                    // Try to receive streamed text from the receiver if it exists
-                    if let Some(ref receiver) = graph_iter.state().stream_receiver {
-                        io::stdout().flush()?;
-
-                        // Try receiving text parts until the channel is empty or closed
-                        while let Ok(text_part) = receiver.try_recv() {
-                            print!("{}", text_part.text);
-                            io::stdout().flush()?;
-                        }
-                        println!(); // Add a newline after all text parts are received
-                    }
-                } else if matches!(node, CurrentNode::UserRequest) {
+                // All streaming is handled by the CliStreamWrapper, so we don't need to do anything here
+                // with the stream_receiver anymore
+                if matches!(node, CurrentNode::UserRequest) {
                     if let Some(last_message) = graph_iter.state().message_history.last() {
                         if last_message.role == Role::Assistant {
                             // Look for text content in the array
@@ -151,12 +146,6 @@ where
         }
     }
 
-    // Get the final result
-    if let Some(result) = graph_iter.get_result() {
-        println!("Final result: {}", result);
-    } else {
-        println!("No final result available");
-    }
     Ok(())
 }
 
@@ -165,6 +154,7 @@ where
     P: Clone,
 {
     println!("Interactive mode. Enter 'exit' or 'quit' to end the session.");
+
     loop {
         print!("> ");
         io::stdout().flush()?;
@@ -185,5 +175,6 @@ where
             eprintln!("Error: {}", e);
         }
     }
+
     Ok(())
 }
