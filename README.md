@@ -6,7 +6,6 @@ Aria is a lightweight agentic codegen assistant that runs in your terminal (for 
 
 - CLI-based interface with both interactive and command execution modes
 - Built with Rust for performance and reliability
-- Supports various AI providers for code generation and editing
 - Integrated tool functions for file operations and command execution:
   - Reading and writing files
   - Listing files and directory structures
@@ -17,9 +16,10 @@ Aria is a lightweight agentic codegen assistant that runs in your terminal (for 
 Currently supported:
 - Anthropic (Claude)
 
-Coming soon:
+Coming soon (maybe):
 - OpenAI
 - Ollama
+- OpenRouter
 
 ## Installation
 
