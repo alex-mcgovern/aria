@@ -13,6 +13,8 @@ use tools::ToolType;
 use super::models::{AnthropicMessage, AnthropicModel, AnthropicRequest, AnthropicStreamEvent};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
+// Default max tokens if none is provided, keeping as a constant for clarity
+const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 #[derive(Clone)]
 pub struct AnthropicProvider {
@@ -62,11 +64,12 @@ impl BaseProvider for AnthropicProvider {
             })
             .transpose()?;
 
+        // Use the provided max_tokens value, defaulting to a higher value if none is provided
         let request = AnthropicRequest {
             system_prompt: String::new(),
             temperature,
             model: self.model.clone(),
-            max_tokens: max_tokens.unwrap_or(1024),
+            max_tokens: max_tokens.unwrap_or(DEFAULT_MAX_TOKENS),
             messages,
             tools,
             stream: Some(true),
