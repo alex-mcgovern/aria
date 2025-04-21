@@ -57,10 +57,12 @@ provider_base_url: "https://api.anthropic.com"  # Optional — a default is prov
 
 ```bash
 # Start an interactive session
-aria interactive
+# You will enter a "chat" like experience
+aria
 
-# Execute a single command
-aria exec "refactor this function to be more efficient"
+# Non-interactive mode
+# Aria will run in a "one-shot" mode, and exit after actioning your request
+aria "refactor this function to be more efficient"
 
 # Work in a specific directory
 aria interactive --dir /path/to/your/project
