@@ -92,38 +92,31 @@ impl AnthropicProvider {
             let mut event_source = event_source;
 
             while let Some(event_result) = event_source.next().await {
-                match event_result {
-                    Ok(reqwest_eventsource::Event::Open) => {
-                        if let Err(e) = tx.send(Ok(StreamEvent::Ping)) {
-                            eprintln!("Failed to send ping event: {}", e);
-                            break;
-                        }
-                    }
+                let send_result = match event_result {
+                    Ok(reqwest_eventsource::Event::Open) => tx.send(Ok(StreamEvent::Ping)),
                     Ok(reqwest_eventsource::Event::Message(message)) => {
-                        let result: Result<StreamEvent> = (|| {
-                            let anthropic_event: AnthropicStreamEvent =
-                                serde_json::from_str(&message.data)
-                                    .context("Failed to parse Anthropic stream event")?;
+                        let stream_event =
+                            serde_json::from_str::<AnthropicStreamEvent>(&message.data)
+                                .context("Failed to parse Anthropic stream event")
+                                .and_then(|anthropic_event| anthropic_event.try_into());
 
-                            anthropic_event.try_into()
-                        })();
-
-                        if let Err(e) = tx.send(result) {
-                            eprintln!("Failed to send stream event: {}", e);
-                            break;
-                        }
+                        tx.send(stream_event)
                     }
                     Err(EventSourceError::StreamEnded) => {
                         event_source.close();
                         break;
                     }
                     Err(err) => {
-                        if let Err(e) = tx.send(Err(anyhow::Error::new(err))) {
-                            eprintln!("Failed to send error event: {}", e);
-                        }
+                        let result = tx.send(Err(anyhow::Error::new(err)));
                         event_source.close();
-                        break;
+                        result
                     }
+                };
+
+                if send_result.is_err() {
+                    // Channel closed, receiver dropped
+                    event_source.close();
+                    break;
                 }
             }
         });
