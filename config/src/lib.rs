@@ -1,8 +1,9 @@
 mod error;
-mod models;
+pub mod models; // Changed to public to expose the TryFrom implementation
 
 pub use error::ConfigError;
-pub use models::{Config, ProviderType};
+pub use models::Config;
+pub use providers::ProviderType;
 
 use std::env;
 use std::fs;

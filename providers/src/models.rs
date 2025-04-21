@@ -1,6 +1,7 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, TryFromInto};
+use std::fmt;
 use tools::{models::ToolName, ToolType};
 
 /// Represents the role of the message sender
@@ -251,6 +252,20 @@ pub trait BaseProvider {
     > + Send;
 }
 
+/// Represents the type of provider to use
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ProviderType {
+    Anthropic,
+}
+
+impl fmt::Display for ProviderType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ProviderType::Anthropic => write!(f, "Anthropic"),
+        }
+    }
+}
+
 /// A provider factory that creates and manages specific LLM provider implementations
 #[derive(Clone)]
 pub enum Provider {
@@ -258,16 +273,19 @@ pub enum Provider {
 }
 
 impl Provider {
-    /// Create a new provider instance for Anthropic
-    pub fn new_anthropic(
-        api_key: Option<String>,
+    /// Create a new provider instance based on the specified provider type
+    pub fn new(
+        provider_type: ProviderType,
+        api_key: String,
         model: String,
         base_url: Option<String>,
     ) -> Result<Self> {
-        let api_key =
-            api_key.ok_or_else(|| anyhow::anyhow!("API key is required for Anthropic provider"))?;
-        let provider = crate::anthropic::AnthropicProvider::new(api_key, model, base_url)?;
-        Ok(Provider::Anthropic(provider))
+        match provider_type {
+            ProviderType::Anthropic => {
+                let provider = crate::anthropic::AnthropicProvider::new(api_key, model, base_url)?;
+                Ok(Provider::Anthropic(provider))
+            }
+        }
     }
 
     /// Stream a response from the provider
@@ -279,7 +297,11 @@ impl Provider {
         temperature: Option<f64>,
     ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send + 'a> {
         match self {
-            Provider::Anthropic(provider) => provider.stream(messages, tools, max_tokens, temperature).await,
+            Provider::Anthropic(provider) => {
+                provider
+                    .stream(messages, tools, max_tokens, temperature)
+                    .await
+            }
         }
     }
 }
@@ -290,7 +312,7 @@ impl BaseProvider for Provider {
         Self: Sized,
     {
         // Default to Anthropic provider
-        Provider::new_anthropic(Some(api_key), model, base_url)
+        Provider::new(ProviderType::Anthropic, api_key, model, base_url)
     }
 
     async fn stream(
@@ -301,7 +323,11 @@ impl BaseProvider for Provider {
         temperature: Option<f64>,
     ) -> Result<impl futures_util::Stream<Item = Result<StreamEvent>> + Send> {
         match self {
-            Provider::Anthropic(provider) => provider.stream(messages, tools, max_tokens, temperature).await,
+            Provider::Anthropic(provider) => {
+                provider
+                    .stream(messages, tools, max_tokens, temperature)
+                    .await
+            }
         }
     }
 }

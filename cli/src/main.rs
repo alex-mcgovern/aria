@@ -1,9 +1,10 @@
 use agent::{Agent, CurrentNode};
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use config::{load_config_file, Config, ProviderType};
+use config::{load_config_file, Config};
 use providers::{models::ContentBlock, Role};
 use providers::{BaseProvider, Provider};
+use std::convert::TryFrom;
 use std::io::{self, Write};
 
 // Import the stream wrapper
@@ -56,8 +57,8 @@ async fn main() -> Result<()> {
         }
     };
 
-    // Create provider based on config
-    let provider = create_provider_from_config(&config)?;
+    // Create provider based on config using TryFrom
+    let provider = Provider::try_from(&config)?;
 
     // Create agent
     let agent = Agent::new(provider);
@@ -85,18 +86,6 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-// Create a provider from config without relying on TryFrom implementation
-fn create_provider_from_config(config: &Config) -> Result<Provider> {
-    // Create provider based on config type
-    match &config.provider {
-        ProviderType::Anthropic => Provider::new_anthropic(
-            config.api_key.clone(),
-            config.model.clone(),
-            config.provider_base_url.clone(),
-        ),
-    }
 }
 
 async fn execute_with_graph_iter<P: BaseProvider>(
