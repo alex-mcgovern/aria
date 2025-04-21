@@ -1,7 +1,7 @@
 use crate::{
     models::{
-        ContentBlock, ContentBlockStartData, ContentDelta, MessageContent, MessageDeltaData,
-        MessageStartData, Request as GenericRequest, Role, StreamEvent, StreamProcessor, Usage,
+        ContentBlock, ContentBlockStartData, ContentDelta, MessageDeltaData, MessageStartData,
+        Request as GenericRequest, Role, StreamEvent, StreamProcessor, Usage,
     },
     Message, Response, ResponseContentBlock, StopReason,
 };
@@ -107,33 +107,6 @@ impl TryFrom<ContentBlock> for AnthropicContentBlock {
             ContentBlock::Text { text } => Ok(AnthropicContentBlock::Text { text }),
             ContentBlock::ToolUse { id, name, input } => {
                 Ok(AnthropicContentBlock::ToolUse { id, name, input })
-            }
-        }
-    }
-}
-
-/// Represents the content of a message, which can either be plain text or a tool result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum AnthropicMessageContent {
-    /// Plain text content
-    Text(String),
-    /// A list of contents (currently only supporting tool results)
-    ContentList(Vec<AnthropicContentBlock>),
-}
-
-impl TryFrom<MessageContent> for AnthropicMessageContent {
-    type Error = anyhow::Error;
-
-    fn try_from(content: MessageContent) -> Result<Self, Self::Error> {
-        match content {
-            MessageContent::Text(text) => Ok(AnthropicMessageContent::Text(text)),
-            MessageContent::ContentList(items) => {
-                let converted: Result<Vec<_>, _> = items
-                    .into_iter()
-                    .map(AnthropicContentBlock::try_from)
-                    .collect();
-                Ok(AnthropicMessageContent::ContentList(converted?))
             }
         }
     }

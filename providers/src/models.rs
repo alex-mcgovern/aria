@@ -48,16 +48,6 @@ impl TryFrom<ResponseContentBlock> for ContentBlock {
     }
 }
 
-/// Represents the content of a message, which can either be plain text or a tool result
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MessageContent {
-    /// Plain text content
-    Text(String),
-    /// A list of contents (currently only supporting tool results)
-    ContentList(Vec<ContentBlock>),
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Message {
     pub role: Role,
